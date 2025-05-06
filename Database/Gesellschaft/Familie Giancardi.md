@@ -1,0 +1,1 @@
+Die Familie Giancardi ist eine der beiden mächtigsten Adelsfamilien in der [[Die Adelskammer|Adelskammer]].  

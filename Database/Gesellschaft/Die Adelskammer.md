@@ -1,0 +1,5 @@
+Die Adelskammer war vor dem [[Der Trilaterale Krieg|trilateralen Krieg]] ein beratendes Instrument des [[Der König|Königs]]. Sie bestand aus den einflussreichsten Familien der [Nördlichen Königreiche](https://witcher.fandom.com/wiki/Northern_Kingdoms). Die Mitglieder wählten und berieten den König. Die zunächst ausschließlich aus Adelsfamilien bestehende Kammer wurde später durch besonders einflussreiche wirtschaftliche Persönlichkeiten erweitert. Durch [[Die Wahlgeschenke|Wahlgeschenke]] wurde die Macht des Königs immer weiter in die Richtung der Adelskammer verschoben, bis ihre Macht weit genug reichte, um den König letztendlich effektiv abzusetzen.
+
+Nach dem [[Erlass zur Stabilität des Landes]] brach ein Streit um die Vormachtstellung unter den Familien aus, der im [[Der Trilaterale Krieg|Trilateralem Krieg]] mündete.
+
+Seit dem Ende des Bürgerkrieges regiert [[Die Kalte Koalition]] allein über die gesamten Nördlichen Königreiche.

@@ -1,0 +1,1 @@
+Familie Traîtrise war Teil der [[Die Adelskammer|Adelskammer]] und bis zum Ende des [[Der Trilaterale Krieg|trilateralen Kriegs]] die mächtigste Familie der nördlichen Königreiche.

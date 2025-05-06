@@ -1,0 +1,1 @@
+Bündnis aus den beiden einflussreichsten Familien der [Nördlichen Königreiche](https://witcher.fandom.com/wiki/Northern_Kingdoms). 
