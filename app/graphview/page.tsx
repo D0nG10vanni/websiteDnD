@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 
 export default function Home() {
@@ -10,6 +9,17 @@ export default function Home() {
           go back to home
         </button>      
       </Link>
+      <h1 className="text-4xl font-bold mb-6">Willkommen bei DaisyUI!</h1>
+      {/* Einfache Primary-Button */}
+      <button className="btn btn-primary mb-4">
+        Primary Button
+      </button>
+      {/* Sekundär, Outline, Akzent, etc. */}
+      <div className="space-x-2">
+        <button className="btn btn-secondary">Secondary</button>
+        <button className="btn btn-accent">Accent</button>
+        <button className="btn btn-outline">Outline</button>
+      </div>
     </main>
   );
 }
