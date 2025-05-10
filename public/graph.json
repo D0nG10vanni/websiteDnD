@@ -1,0 +1,82 @@
+[
+  {
+    "id": "Der Trilaterale Krieg",
+    "connections": [
+      "Die Adelskammer",
+      "Die Kalte Koalition",
+      "Familie Giancardi",
+      "Familie Brôschwin"
+    ]
+  },
+  {
+    "id": "Die Wahlgeschenke",
+    "connections": [
+      "Die Adelskammer"
+    ]
+  },
+  {
+    "id": "Erlass zur Stabilität des Landes",
+    "connections": [
+      "Der König"
+    ]
+  },
+  {
+    "id": "Timeline",
+    "connections": []
+  },
+  {
+    "id": "Der König",
+    "connections": [
+      "Der Trilaterale Krieg",
+      "Die Wahlgeschenke",
+      "Die Adelskammer"
+    ]
+  },
+  {
+    "id": "Die Adelskammer",
+    "connections": [
+      "Der Trilaterale Krieg",
+      "Der König",
+      "Die Wahlgeschenke",
+      "Erlass zur Stabilität des Landes",
+      "Die Kalte Koalition"
+    ]
+  },
+  {
+    "id": "Die Kalte Koalition",
+    "connections": []
+  },
+  {
+    "id": "Familie Brôschwin",
+    "connections": [
+      "Die Adelskammer"
+    ]
+  },
+  {
+    "id": "Familie Giancardi",
+    "connections": [
+      "Die Adelskammer"
+    ]
+  },
+  {
+    "id": "Familie Traîtrise",
+    "connections": [
+      "Die Adelskammer",
+      "Der Trilaterale Krieg"
+    ]
+  },
+  {
+    "id": "Ardo",
+    "connections": []
+  },
+  {
+    "id": "Session 0",
+    "connections": [
+      "Ardo"
+    ]
+  },
+  {
+    "id": "Karte",
+    "connections": []
+  }
+]
