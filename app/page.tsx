@@ -14,6 +14,11 @@ export default function Home() {
           go to graph view
         </button>      
       </Link>
+      <Link href="/tests">
+        <button className="mt-4 px-4 py-2 bg-blue-500 text-white rounded">
+          go to test site
+        </button>      
+      </Link>
     </main>
   );
 }
