@@ -1,0 +1,108 @@
+[
+  {
+    "id": "Der Trilaterale Krieg",
+    "connections": [
+      "Die Adelskammer",
+      "Die Kalte Koalition",
+      "Familie Giancardi",
+      "Familie Brôschwin"
+    ],
+    "x": 0.11626725356048086,
+    "y": 0.10646955537928611
+  },
+  {
+    "id": "Die Wahlgeschenke",
+    "connections": [
+      "Die Adelskammer"
+    ],
+    "x": 0.3691586754074595,
+    "y": 0.09034182749915347
+  },
+  {
+    "id": "Erlass zur Stabilität des Landes",
+    "connections": [
+      "Der König"
+    ],
+    "x": 0.2888153269126471,
+    "y": -0.07641541862169479
+  },
+  {
+    "id": "Timeline",
+    "connections": [],
+    "x": 0.47028294502485335,
+    "y": 0.8329193701754177
+  },
+  {
+    "id": "Der König",
+    "connections": [
+      "Der Trilaterale Krieg",
+      "Die Wahlgeschenke",
+      "Die Adelskammer"
+    ],
+    "x": 0.27532436400942917,
+    "y": 0.03268452654345385
+  },
+  {
+    "id": "Die Adelskammer",
+    "connections": [
+      "Der Trilaterale Krieg",
+      "Der König",
+      "Die Wahlgeschenke",
+      "Erlass zur Stabilität des Landes",
+      "Die Kalte Koalition"
+    ],
+    "x": 0.18373971195715924,
+    "y": 0.07456482594256082
+  },
+  {
+    "id": "Die Kalte Koalition",
+    "connections": [],
+    "x": 0.20049358251864358,
+    "y": 0.2238246289707766
+  },
+  {
+    "id": "Familie Brôschwin",
+    "connections": [
+      "Die Adelskammer"
+    ],
+    "x": 0.004869321184710061,
+    "y": 0.07797376421962646
+  },
+  {
+    "id": "Familie Giancardi",
+    "connections": [
+      "Die Adelskammer"
+    ],
+    "x": 0.06954773159117855,
+    "y": 0.2139483401821125
+  },
+  {
+    "id": "Familie Traîtrise",
+    "connections": [
+      "Die Adelskammer",
+      "Der Trilaterale Krieg"
+    ],
+    "x": 0.08003823770797223,
+    "y": -0.033272896944647766
+  },
+  {
+    "id": "Ardo",
+    "connections": [],
+    "x": -0.48712918253594295,
+    "y": -0.9500192381260507
+  },
+  {
+    "id": "Session 0",
+    "connections": [
+      "Ardo"
+    ],
+    "x": -0.5714079673385901,
+    "y": -0.8754024562832531
+  },
+  {
+    "id": "Karte",
+    "connections": [],
+    "x": -1.0,
+    "y": 0.28238317106325905
+  }
+]
