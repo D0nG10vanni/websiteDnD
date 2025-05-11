@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useState, useEffect, useRef } from 'react';
-import { Home, FileText, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
+import { Home, FileText, ChevronLeft, ChevronRight, AlertCircle, FilePlus } from 'lucide-react';
 import { remark } from 'remark';
 import html from 'remark-html';
 
@@ -62,29 +62,72 @@ export default function GraphPage() {
       nodeInfo: selectedNode
     });
 
-    // Suche nach der passenden Markdown-Datei im Database-Ordner
-    fetch(`/api/findArticle?id=${encodeURIComponent(articleId)}`)
-      .then(res => {
+    // Versuche zuerst direkt die Datei zu laden mit getArticleContent
+    fetch(`/api/getArticleContent?filename=${encodeURIComponent(articleId)}`)
+      .then(async res => {
+        // Prüfe, ob die Anfrage erfolgreich war
         if (!res.ok) {
-          return res.json().then(data => {
-        setDebug((prev: DebugInfo | null) => ({ ...prev, findArticleResponse: data }));
-          });
+          // Bei Fehler, versuche die findArticle API als Fallback
+          return fetch(`/api/findArticle?id=${encodeURIComponent(articleId)}`)
+            .then(async findRes => {
+              // Handle 404 errors specifically for missing articles
+              if (findRes.status === 404) {
+                throw new Error(`Artikel "${selectedNode.name}" wurde nicht gefunden. Die Datei "${articleId}" konnte nicht in der Datenbank gefunden werden.`);
+              }
+              
+              // Check for non-JSON responses
+              const contentType = findRes.headers.get('content-type');
+              if (!contentType || !contentType.includes('application/json')) {
+                const text = await findRes.text();
+                throw new Error(`Datenbankfehler: ${findRes.status}. Bitte überprüfe die Server-Logs.`);
+              }
+              
+              const data = await findRes.json();
+              
+              if (!findRes.ok) {
+                throw new Error(data.error || `Server-Fehler: ${findRes.status}`);
+              }
+              
+              return data;
+            })
+            .then(data => {
+              setArticlePath(data.path);
+              setDebug(prev => ({ ...prev, findArticleResponse: data }));
+              return fetch(`/api/getArticleContent?path=${encodeURIComponent(data.path)}`);
+            });
         }
-        return res.json();
-      })
-      .then(async data => {
-        setArticlePath(data.path);
-        setDebug(prev => ({ ...prev, findArticleResponse: data }));
+
+        // Die Datei wurde direkt gefunden
+        const contentType = res.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          const text = await res.text();
+          throw new Error(`Server-Fehler: ${res.status}. Erwartete JSON-Antwort, erhielt aber einen anderen Datentyp.`);
+        }
         
-        // Markdown-Inhalt laden
-        const contentRes = await fetch(`/api/getArticleContent?path=${encodeURIComponent(data.path)}`);
-        if (!contentRes.ok) {
-          return contentRes.json().then(contentData => {
-            throw new Error(`Inhalt konnte nicht geladen werden: ${contentData.error || contentRes.status}`);
-          });
+        return res;
+      })
+      .then(async res => {
+        // Prüfe Content-Type
+        const contentType = res.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          const text = await res.text();
+          throw new Error(`Server-Fehler: ${res.status}. Erwartete JSON-Antwort, erhielt aber einen anderen Datentyp.`);
         }
-        const contentData = await contentRes.json();
+        
+        // Parse als JSON
+        const contentData = await res.json();
+        
+        // Überprüfe auf Fehler
+        if (!res.ok) {
+          throw new Error(contentData.error || `Inhalt konnte nicht geladen werden: ${res.status}`);
+        }
+        
         setDebug(prev => ({ ...prev, getContentResponse: contentData }));
+        
+        // Setze den Pfad, falls er noch nicht gesetzt wurde
+        if (!articlePath && contentData.path) {
+          setArticlePath(contentData.path);
+        }
         
         // Markdown zu HTML konvertieren
         const htmlContent = await markdownToHtml(contentData.content);
@@ -215,11 +258,31 @@ export default function GraphPage() {
                 <div>
                   <h3 className="font-bold">Fehler beim Laden</h3>
                   <p>{error}</p>
-                  {error.includes('nicht gefunden') && (
-                    <div className="mt-2 text-sm">
-                      <p>Es scheint keine Markdown-Datei für &quot;{selectedNode.name}&quot; zu existieren.</p>
-                      <p className="mt-1">Überprüfe den Dateinamen oder erstelle eine neue Datei.</p>
-                      <p className="mt-3 font-medium">Gesuchte ID: {selectedNode.id}.md</p>
+                  {(error.includes('nicht gefunden') || error.includes('existiert nicht') || error.includes('konnte nicht')) && (
+                    <div className="mt-3 text-sm">
+                      <p>Mögliche Gründe für diesen Fehler:</p>
+                      <ul className="list-disc pl-5 mt-2 mb-3">
+                        <li>Die Datei existiert nicht in der Datenbank</li>
+                        <li>Der Dateiname unterscheidet sich vom Knotennamen</li>
+                        <li>Die Datei liegt in einem Unterordner, der nicht gefunden wurde</li>
+                      </ul>
+                      
+                      <div className="mt-2 space-y-2">
+                        <p>Du könntest:</p>
+                        <Link 
+                          href={`/editor/new?title=${encodeURIComponent(selectedNode.name)}&id=${encodeURIComponent(selectedNode.id)}`}
+                          className="inline-block px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">
+                          <FilePlus className="inline-block mr-1 h-4 w-4" />
+                          Neuen Artikel erstellen
+                        </Link>
+                        
+                        <div className="mt-3">
+                          <p className="font-medium mb-1">Oder überprüfe, ob die Datei bereits existiert:</p>
+                          <p className="text-xs text-gray-700 bg-gray-100 p-2 rounded">
+                            Gesuchte Datei: <span className="font-mono">{selectedNode.id}.md</span>
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   )}
                   
