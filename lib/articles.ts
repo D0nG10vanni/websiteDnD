@@ -34,7 +34,8 @@ export async function fetchArticles(): Promise<Article[]> {
     const file = parts.pop()!;                              // "Der König.md"
     const folder = parts.join("/") || "Allgemein";         // Ordnername oder "Allgemein"
     const title = file.replace(/\.md$/, "");                // "Der König"
-    const slug = `${folder}/${title}`;                      // "Gesellschaft/Der König"
-    return { slug, title, folder };
+    const slug = `${folder}/${title}`;                   // "Gesellschaft/Der König"  
+    const title_raw = `${title}`                        // reine titel mit .md
+    return { slug, title, folder, title_raw };
   });
 }

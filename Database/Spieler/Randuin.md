@@ -1,0 +1,1 @@
+Randuin ist der Charakter von Janne. Er ist ein Paladin.

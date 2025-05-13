@@ -1,5 +1,11 @@
+import createMDX from '@next/mdx'
 /** @type {import('next').NextConfig} */
+
 const nextConfig = {
+  // markdown-Datein mit MDX-Parser: https://nextjs.org/docs/app/guides/mdx
+  
+  pageExtensions: ['js', 'jsx', 'md', 'mdx', 'ts', 'tsx'],
+
   // Konfigurieren der API-Routen für experimentelle Funktionen
   experimental: {
     serverComponentsExternalPackages: ['fs'],
@@ -20,5 +26,21 @@ const nextConfig = {
     return config;
   },
 };
+
+const withMDX = require('@next/mdx')({
+  extension: /\.(md|mdx)$/,
+  options: {
+    remarkPlugins: [],
+    rehypePlugins: [],
+  },
+})
+
+/** @type {import('next').NextConfig} */
+module.exports = withMDX({
+  pageExtensions: ['ts', 'tsx', 'md', 'mdx'],
+})
+ 
+// Merge MDX config with Next.js config
+export default withMDX(nextConfig)
 
 module.exports = nextConfig;

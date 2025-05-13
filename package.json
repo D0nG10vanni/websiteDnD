@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.49.4",
     "d3-force": "^3.0.0",
     "lucide-react": "^0.509.0",
     "marked": "^15.0.11",

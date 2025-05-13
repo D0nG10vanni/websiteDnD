@@ -168,7 +168,7 @@ export default function MarkdownEditor() {
         </div>           
         <div className="flex justify-between items-center mb-4">
             <Link
-                href="/tests"            
+                href="/ArticleView"            
                 className="btn btn-primary">
                 Zurück zur Artikelübersicht
             </Link>

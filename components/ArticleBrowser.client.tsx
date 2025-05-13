@@ -43,7 +43,7 @@ export default function ArticleBrowser({ articles }: { articles: Article[] }) {
         <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-bold text-white">Alle Artikel</h2>
             <Link
-                href="/tests/NeuerArtikel"            
+                href="/ArticleView/NeuerArtikel"            
                 className="text-blue-400 hover:text-blue-500 underline">
                 Neuer Artikel
             </Link>
