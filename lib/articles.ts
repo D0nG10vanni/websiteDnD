@@ -1,41 +1,42 @@
-import fs from "fs/promises";
-import path from "path";
+import { supabase } from './supabaseClient'
 
-async function getAllMarkdownFiles(dir: string): Promise<string[]> {
-  const entries = await fs.readdir(dir, { withFileTypes: true });
-  const files = await Promise.all(
-    entries.map(async (entry) => {
-      const fullPath = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        return getAllMarkdownFiles(fullPath);
-      } else if (entry.isFile() && entry.name.endsWith(".md")) {
-        return fullPath;
-      } else {
-        return [];
-      }
-    })
-  );
-  return files.flat();
-}
-
-export interface Article {
-  slug: string;
-  title: string;
-  folder: string;
+export type Article = {
+  id:     number
+  title:  string
+  folder: string
 }
 
 export async function fetchArticles(): Promise<Article[]> {
-  const databaseDir = path.join(process.cwd(), "Database");
-  const paths = await getAllMarkdownFiles(databaseDir);
+  const { data, error } = await supabase
+    .from('posts')              // ganz sicher lowercase
+    .select('id, title, kategorie')
+    .order('created_at', { ascending: false }) as { data: { id: number; title: string; folder: string }[] | null, error: any }
 
-  return paths.map((fullPath) => {
-    const rel = path.relative(databaseDir, fullPath);       // z.B. "Gesellschaft/Der König.md"
-    const parts = rel.split(path.sep);
-    const file = parts.pop()!;                              // "Der König.md"
-    const folder = parts.join("/") || "Allgemein";         // Ordnername oder "Allgemein"
-    const title = file.replace(/\.md$/, "");                // "Der König"
-    const slug = `${folder}/${title}`;                   // "Gesellschaft/Der König"  
-    const title_raw = `${title}`                        // reine titel mit .md
-    return { slug, title, folder, title_raw };
-  });
+  if (error) {
+    console.error(
+      'Supabase-Fehler beim Laden der Artikel:',
+      'code=',    error.code,
+      'message=', error.message,
+      'details=', error.details,
+      'hint=',    error.hint
+    )
+    throw new Error(error.message)
+  }
+
+  console.log('✅ articles:', data)
+    if (!data) {
+        console.error('Supabase returned no data for articles')
+        throw new Error('No data returned from Supabase')
+    }
+  if (!Array.isArray(data)) {
+    throw new Error('Unexpected data format received from Supabase');
+  }
+
+  const articles: Article[] = data.map(item => ({
+    id: item.id,
+    title: item.title,
+    folder: item.folder,
+  }));
+
+  return articles;
 }
