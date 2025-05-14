@@ -6,11 +6,15 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "generate-graph": "node scripts/generateGraph.js",
+    "compute-graph": "node scripts/computeGraph.js",
+    "update-graph": "npm run generate-graph && npm run compute-graph"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",
     "d3-force": "^3.0.0",
+    "dotenv": "^16.5.0",
     "lucide-react": "^0.509.0",
     "marked": "^15.0.11",
     "next": "15.3.1",

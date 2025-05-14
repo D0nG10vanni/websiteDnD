@@ -29,7 +29,7 @@ export default function Header() {
             <Link href="/ArticleView" className="text-gray-300 hover:text-white transition">
               Articles
             </Link>
-            <Link href="/Games" className="text-gray-300 hover:text-white transition">
+            <Link href="/games" className="text-gray-300 hover:text-white transition">
               Games
             </Link>
           </nav>
@@ -97,7 +97,7 @@ export default function Header() {
           <Link href="/ArticleView" className="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">
             Articles
           </Link>
-          <Link href="/Games" className="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">
+          <Link href="/games" className="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-gray-700">
             Games
           </Link>
         </div>

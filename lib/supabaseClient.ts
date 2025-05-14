@@ -6,6 +6,13 @@ const supabaseAnonKey: string = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey)
 
+if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+  throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL in .env.local')
+}
+if (!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+  throw new Error('Missing NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local')
+}
+
 // Hilfsfunktionen
 export function getUser() {
   return supabase.auth.getUser();

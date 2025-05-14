@@ -60,7 +60,7 @@ export default function MarkdownEditor() {
         <div className="card w-full bg-base-100 shadow-xl border border-primary/20">
           <div className="card-body">
             <h1 className="card-title text-3xl font-serif text-center mx-auto mb-6">
-              <span className="text-primary">✦</span> Das Grimoire <span className="text-primary">✦</span>
+              <span className="text-primary">✦</span> Das Scripturam Vas <span className="text-primary">✦</span>
             </h1>
             
             {message && (
@@ -83,7 +83,7 @@ export default function MarkdownEditor() {
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="form-control w-full">
                 <label className="label">
-                  <span className="label-text font-serif text-lg">Titel des Zaubers</span>
+                  <span className="label-text font-serif text-lg">Titel des Artikels</span>
                 </label>
                 <input
                   type="text"
@@ -91,21 +91,21 @@ export default function MarkdownEditor() {
                   value={title}
                   onChange={e => setTitle(e.target.value)}
                   className="input input-bordered input-primary w-full bg-base-200 font-serif"
-                  placeholder="Gib dem Zauber einen Namen..."
+                  placeholder="Gib dem Artikel einen griffigen Namen..."
                   required
                 />
               </div>
               
               <div className="form-control w-full">
                 <label className="label">
-                  <span className="label-text font-serif text-lg">Inhalt des Zaubers (Markdown)</span>
+                  <span className="label-text font-serif text-lg">Inhalt des Artikels</span>
                 </label>
                 <textarea
                   id="content"
                   value={content}
                   onChange={e => setContent(e.target.value)}
                   className="textarea textarea-bordered textarea-primary w-full h-64 font-mono bg-base-200"
-                  placeholder="# Überschrift&#10;&#10;Schreibe deinen Zauber hier..."
+                  placeholder="# Überschrift&#10;&#10;Schreibe deinen Artikel hier rein..."
                   required
                 />
               </div>
@@ -123,10 +123,10 @@ export default function MarkdownEditor() {
                   {isLoading ? (
                     <>
                       <span className="loading loading-spinner loading-sm"></span>
-                      <span className="font-serif">Verzaubere...</span>
+                      <span className="font-serif">Archiviere...</span>
                     </>
                   ) : (
-                    <span className="font-serif">Im Grimoire festhalten</span>
+                    <span className="font-serif">Im Kompendium festhalten</span>
                   )}
                 </button>
               </div>
@@ -135,7 +135,7 @@ export default function MarkdownEditor() {
         </div>
         
         <div className="text-center mt-8 text-xs opacity-70 font-serif">
-          ✧ Verfasst mit alten Tinten und Pergament ✧
+          ✧ Verfasst mit alten Tinten auf gilbem Pergament ✧
         </div>
       </div>
     </div>

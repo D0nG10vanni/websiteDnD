@@ -1,5 +1,6 @@
 import ArticleBrowser from '@/components/ArticleBrowser.client'
 import { fetchArticles } from '@/lib/articles'
+import Link from 'next/link'
 
 export default async function Page() {
   const articles = await fetchArticles()
@@ -16,9 +17,22 @@ export default async function Page() {
             <div className="divider">✧ ✦ ✧</div>
             
             <ArticleBrowser articles={articles} />
-            
+              <div className="flex flex-col sm:flex-row gap-4 mt-4 w-full justify-center items-center">
+                <Link
+                  href="/ArticleView/NeuerArtikel"
+                  className="btn btn-primary flex-1 w-full sm:w-auto"
+                >
+                  Neuen Artikel anlegen
+                </Link>
+                <Link
+                  href="/ArticleView/Upload"
+                  className="btn btn-primary flex-1 w-full sm:w-auto"
+                >
+                  Neuen Artikel hochladen
+                </Link>
+              </div>
             <div className="divider mt-8">✧ ✦ ✧</div>
-            
+
             <div className="text-center mt-4 text-xs opacity-70 font-serif">
               ✧ "Das ist meine Geschichte, nicht deine. Du musst mich sie zu Ende erzählen lassen." ✧
               <br /> ~ Cirilla Fiona Elen Riannon
