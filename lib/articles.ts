@@ -1,42 +1,41 @@
+// lib/articles.ts
 import { supabase } from './supabaseClient'
 
 export type Article = {
-  id:     number
-  title:  string
-  folder: string
+  id:           number
+  title:        string
+  category:     string  // das ist die Überkategorie
+  subcategory?: string  // das ist die eigentliche Ordner-Kategorie
 }
 
 export async function fetchArticles(): Promise<Article[]> {
-  const { data, error } = await supabase
-    .from('posts')              // ganz sicher lowercase
-    .select('id, title, kategorie')
-    .order('created_at', { ascending: false }) as { data: { id: number; title: string; folder: string }[] | null, error: any }
+  // 1) Alle Posts mit folder_id
+  const { data: posts, error: e1 } = await supabase
+    .from('posts')
+    .select('id, title, folder_id')
+    .order('created_at', { ascending: false })
 
-  if (error) {
-    console.error(
-      'Supabase-Fehler beim Laden der Artikel:',
-      'code=',    error.code,
-      'message=', error.message,
-      'details=', error.details,
-      'hint=',    error.hint
-    )
-    throw new Error(error.message)
-  }
+  if (e1) throw e1
 
-  console.log('✅ articles:', data)
-    if (!data) {
-        console.error('Supabase returned no data for articles')
-        throw new Error('No data returned from Supabase')
+  // 2) Alle Folder (inkl. parent_id)
+  const { data: folders, error: e2 } = await supabase
+    .from('folders')
+    .select('id, name, parent_id')
+
+  if (e2) throw e2
+
+  // 3) Je Post Unter- und Über-Kategorie ermitteln
+  return (posts ?? []).map((p: any) => {
+    const folder = folders?.find(f => f.id === p.folder_id) || null
+    const parent = folder && folder.parent_id
+      ? folders!.find(f => f.id === folder.parent_id)
+      : null
+
+    return {
+      id:       p.id,
+      title:    p.title,
+      category: parent?.name ?? folder?.name ?? 'Unkategorisiert',
+      subcategory: parent ? folder!.name : undefined
     }
-  if (!Array.isArray(data)) {
-    throw new Error('Unexpected data format received from Supabase');
-  }
-
-  const articles: Article[] = data.map(item => ({
-    id: item.id,
-    title: item.title,
-    folder: item.folder,
-  }));
-
-  return articles;
+  })
 }

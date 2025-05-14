@@ -1,161 +1,143 @@
-// app/ArticleView/Upload/page.tsx
-'use client';
+'use client'
 
-import React, { useState, useEffect } from 'react';
-import { useDropzone } from 'react-dropzone';
-import { supabase } from '@/lib/supabaseClient';
+import { useState } from 'react'
+import Link from 'next/link'
 
-type Folder = { id: number; name: string; parent_id: number | null };
-type UploadItem = { file: File; folderId: number | null };
+export default function MarkdownEditor() {
+  const [title, setTitle] = useState('')
+  const [content, setContent] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const [message, setMessage] = useState('')
 
-export default function UploadPage() {
-  const [folders, setFolders] = useState<Folder[]>([]);
-  const [newFolderName, setNewFolderName] = useState('');
-  const [newFolderParent, setNewFolderParent] = useState<number | null>(null);
-  const [items, setItems] = useState<UploadItem[]>([]);
-  const [uploading, setUploading] = useState(false);
-  const [message, setMessage] = useState('');
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoading(true)
+    setMessage('')
 
-  useEffect(() => {
-    fetchFolders();
-  }, []);
-
-  async function fetchFolders() {
-    const { data, error } = await supabase
-      .from('folders')
-      .select('id, name, parent_id');
-    if (error) console.error('Error fetching folders:', error);
-    else setFolders(data || []);
-  }
-
-  async function createFolder() {
-    if (!newFolderName.trim()) return;
-    const { error } = await supabase
-      .from('folders')
-      .insert([{ name: newFolderName.trim(), parent_id: newFolderParent }]);
-    if (error) console.error('Error creating folder:', error);
-    else {
-      setNewFolderName('');
-      setNewFolderParent(null);
-      fetchFolders();
+    if (!title.trim() || !content.trim()) {
+      setMessage('Bitte alle Felder ausfüllen')
+      setIsLoading(false)
+      return
     }
-  }
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop: accepted => {
-      const newItems = accepted.map(file => ({ file, folderId: null }));
-      setItems(prev => [...prev, ...newItems]);
-    },
-    accept: { 'text/markdown': ['.md'] },
-  });
+    try {
+      const response = await fetch('/api/save-articles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, content })
+      })
 
-  async function uploadFiles() {
-    setUploading(true);
-    setMessage('');
-    for (const item of items) {
+      const text = await response.text()
+      let data: any = {}
       try {
-        const { file, folderId } = item;
-        // Moderne Browser: direkt file.text()
-        const text = await file.text();
-        const { error } = await supabase
-          .from('posts')
-          .insert({
-            title: file.name.replace(/\.md$/, ''),
-            content: text,
-            creator: 1,
-            folder_id: folderId,
-          });
-        if (error) throw error;
-      } catch (err: any) {
-        console.error('Upload error', err);
-        setMessage(`Fehler beim Hochladen: ${err.message || err}`);
-        setUploading(false);
-        return;
+        data = text ? JSON.parse(text) : {}
+      } catch (err) {
+        console.error('Invalid JSON response from /api/save-articles:', text)
+        setMessage('Server-Antwort ungültig')
+        setIsLoading(false)
+        return
       }
+
+      if (!response.ok) {
+        const errMsg = data.error || response.statusText
+        setMessage(`Fehler: ${errMsg}`)
+      } else {
+        setMessage('Artikel erfolgreich gespeichert!')
+        setTitle('')
+        setContent('')
+      }
+    } catch (error) {
+      console.error('Fehler beim Speichern:', error)
+      setMessage('Ein Fehler ist aufgetreten')
+    } finally {
+      setIsLoading(false)
     }
-    setMessage('Alle Dateien erfolgreich hochgeladen!');
-    setItems([]);
-    setUploading(false);
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">Artikel per Drag & Drop hochladen</h1>
-
-      <section className="mb-6">
-        <h2 className="font-semibold mb-2">Ordnerstruktur verwalten</h2>
-        <ul className="list-disc pl-5 mb-4">
-          {folders.map(f => (
-            <li key={f.id}>
-              {f.name}
-              {f.parent_id ? ` (unter ${folders.find(p => p.id === f.parent_id)?.name})` : ''}
-            </li>
-          ))}
-        </ul>
-        <div className="flex space-x-2">
-          <input
-            type="text"
-            placeholder="Neuer Ordnername"
-            value={newFolderName}
-            onChange={e => setNewFolderName(e.target.value)}
-            className="border p-1 flex-grow rounded"
-          />
-          <select
-            value={newFolderParent ?? ''}
-            onChange={e => setNewFolderParent(e.target.value ? Number(e.target.value) : null)}
-            className="border p-1 rounded"
-          >
-            <option value="">Kein Elternordner</option>
-            {folders.map(f => (
-              <option key={f.id} value={f.id}>{f.name}</option>
-            ))}
-          </select>
-          <button onClick={createFolder} className="btn btn-primary">Ordner erstellen</button>
+    <div className="min-h-screen bg-base-200" data-theme="fantasy">
+      <div className="max-w-4xl mx-auto p-6 pt-12">
+        <div className="card w-full bg-base-100 shadow-xl border border-primary/20">
+          <div className="card-body">
+            <h1 className="card-title text-3xl font-serif text-center mx-auto mb-6">
+              <span className="text-primary">✦</span> Das Grimoire <span className="text-primary">✦</span>
+            </h1>
+            
+            {message && (
+              <div className={`alert ${message.includes('Fehler') ? 'alert-error' : 'alert-success'} shadow-lg mb-6`}>
+                <div>
+                  {message.includes('Fehler') ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="stroke-current flex-shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="stroke-current flex-shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  )}
+                  <span>{message}</span>
+                </div>
+              </div>
+            )}
+            
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="form-control w-full">
+                <label className="label">
+                  <span className="label-text font-serif text-lg">Titel des Zaubers</span>
+                </label>
+                <input
+                  type="text"
+                  id="title"
+                  value={title}
+                  onChange={e => setTitle(e.target.value)}
+                  className="input input-bordered input-primary w-full bg-base-200 font-serif"
+                  placeholder="Gib dem Zauber einen Namen..."
+                  required
+                />
+              </div>
+              
+              <div className="form-control w-full">
+                <label className="label">
+                  <span className="label-text font-serif text-lg">Inhalt des Zaubers (Markdown)</span>
+                </label>
+                <textarea
+                  id="content"
+                  value={content}
+                  onChange={e => setContent(e.target.value)}
+                  className="textarea textarea-bordered textarea-primary w-full h-64 font-mono bg-base-200"
+                  placeholder="# Überschrift&#10;&#10;Schreibe deinen Zauber hier..."
+                  required
+                />
+              </div>
+              
+              <div className="divider">✦ ✧ ✦</div>
+              
+              <div className="flex justify-between items-center">
+                <Link href="/ArticleView" className="btn btn-ghost border border-base-300">
+                  <span className="font-serif">Zurück zum Kompendium</span>
+                </Link>
+                <button 
+                  type="submit" 
+                  disabled={isLoading} 
+                  className="btn btn-primary">
+                  {isLoading ? (
+                    <>
+                      <span className="loading loading-spinner loading-sm"></span>
+                      <span className="font-serif">Verzaubere...</span>
+                    </>
+                  ) : (
+                    <span className="font-serif">Im Grimoire festhalten</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-      </section>
-
-      <section
-        {...getRootProps()}
-        className="border-2 border-dashed p-6 text-center mb-6 rounded"
-      >
-        <input {...getInputProps()} />
-        {isDragActive ? (
-          <p>Dateien hierher ziehen...</p>
-        ) : (
-          <p>Ziehe Markdown-Dateien hierher oder klicke zum Auswählen</p>
-        )}
-      </section>
-
-      {items.length > 0 && (
-        <section className="mb-6">
-          <h2 className="font-semibold mb-2">Ausgewählte Dateien</h2>
-          <ul className="space-y-2 mb-4">
-            {items.map((item, idx) => (
-              <li key={idx} className="flex items-center space-x-4">
-                <span>{item.file.name}</span>
-                <select
-                  value={item.folderId ?? ''}
-                  onChange={e => {
-                    const id = e.target.value ? Number(e.target.value) : null;
-                    setItems(prev => prev.map((x, j) => j === idx ? { file: x.file, folderId: id } : x));
-                  }}
-                  className="border p-1 rounded"
-                >
-                  <option value="">Kein Ordner</option>
-                  {folders.map(f => (
-                    <option key={f.id} value={f.id}>{f.name}</option>
-                  ))}
-                </select>
-              </li>
-            ))}
-          </ul>
-          <button onClick={uploadFiles} disabled={uploading} className="btn btn-primary">
-            {uploading ? 'Hochladen...' : 'Hochladen'}
-          </button>
-        </section>
-      )}
-
-      {message && <p className="mt-4 text-center">{message}</p>}
+        
+        <div className="text-center mt-8 text-xs opacity-70 font-serif">
+          ✧ Verfasst mit alten Tinten und Pergament ✧
+        </div>
+      </div>
     </div>
-  );
+  )
 }
