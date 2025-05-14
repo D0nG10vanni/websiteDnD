@@ -10,7 +10,7 @@ export default async function Page() {
         <div className="card w-full bg-base-100 shadow-xl border border-primary/20">
           <div className="card-body">
             <h1 className="card-title text-3xl font-serif text-center mx-auto mb-6">
-              <span className="text-primary">✦</span> Das Kompendium <span className="text-primary">✦</span>
+              <span className="text-primary">✦</span> Encyclopaedia <span className="text-primary">✦</span>
             </h1>
             
             <div className="divider">✧ ✦ ✧</div>
