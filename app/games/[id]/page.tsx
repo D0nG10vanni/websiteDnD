@@ -1,4 +1,3 @@
-// /app/games/[id]/page.tsx
 import { cookies } from 'next/headers'
 import PasswordForm from '../../../components/PasswordForm'
 import { fetchGameById, Game } from '../../../lib/games'
@@ -8,9 +7,12 @@ import Link from 'next/link'
 type Props = { params: { id: string } }
 
 export default async function GameDetailPage({ params }: Props) {
-  const id = parseInt(params.id, 10)
-  const game: Game | null = await fetchGameById(id)
-  if (!game) notFound()
+  const { id } = params
+  const gameId = parseInt(id, 10)
+  const game = await fetchGameById(gameId)
+  if (!game) {
+    return notFound()
+  }
 
   // 1) Cookie auslesen
   const cookieStore = await cookies()
@@ -18,7 +20,7 @@ export default async function GameDetailPage({ params }: Props) {
 
   // 2) wenn nicht authed -> Passwort-Form anzeigen
   if (!isAuthed) {
-    return <PasswordForm id={id} />
+    return <PasswordForm id={gameId} />
   }
 
   // 3) wenn authed -> ursprüngliches UI
@@ -47,9 +49,9 @@ export default async function GameDetailPage({ params }: Props) {
                 <span className="ml-2">✦</span>
               </Link>
               
-              <Link href={`/games/${game.id}/sessions`} className="btn btn-secondary font-serif">
+              <Link href={`/games/${game.id}/ArticleView`} className="btn btn-secondary font-serif">
                 <span className="mr-2">✧</span>
-                Kapitel anzeigen
+                Zum Kompendium
                 <span className="ml-2">✧</span>
               </Link>
             </div>

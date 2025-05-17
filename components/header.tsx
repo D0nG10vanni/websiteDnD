@@ -38,7 +38,9 @@ export default function Header() {
           <div className="flex items-center space-x-4">
             {user ? (
               <>
-                <span className="text-sm text-gray-300">{user.email}</span>
+                <Link href="/auth/UserHomepage" className="text-gray-300 hover:text-white transition">
+                  Profil
+                </Link>
                 <button
                   onClick={() => signOut()}
                   className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"

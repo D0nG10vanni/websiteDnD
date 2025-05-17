@@ -113,7 +113,7 @@ export default function MarkdownEditor() {
               <div className="divider">✦ ✧ ✦</div>
               
               <div className="flex justify-between items-center">
-                <Link href="/ArticleView" className="btn btn-ghost border border-base-300">
+                <Link href="/games/[id]/ArtikelView" className="btn btn-ghost border border-base-300">
                   <span className="font-serif">Zurück zum Kompendium</span>
                 </Link>
                 <button 
