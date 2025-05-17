@@ -1,9 +1,13 @@
-// app/layout.tsx
+"use client";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/AuthContext";
 import Header from "../components/header";
+
+import { createBrowserSupabaseClient } from '@supabase/auth-helpers-nextjs';
+import { SessionContextProvider } from '@supabase/auth-helpers-react';
+import { useState } from 'react';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -15,27 +19,26 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "DND Lore Manager",
-  description: "Helps you manage your DND Lore as well as the story.",
-};
+// export const metadata removed because it is not supported in client components
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
+  const [supabaseClient] = useState(() => createBrowserSupabaseClient());
+
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      > 
-        <AuthProvider>
-          <Header />
-          <main>
-            {children}
-          </main>
-        </AuthProvider>  
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <SessionContextProvider supabaseClient={supabaseClient}>
+          <AuthProvider>
+            <Header />
+            <main>
+              {children}
+            </main>
+          </AuthProvider>
+        </SessionContextProvider>
       </body>
     </html>
   );

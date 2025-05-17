@@ -40,10 +40,10 @@ export default async function GameDetailPage({ params }: Props) {
             <div className="flex flex-col md:flex-row justify-center items-center gap-4 mt-6">
               <Link href="/games" className="btn btn-ghost border border-base-300 font-serif">
                 <span className="mr-2">←</span>
-                Zurück zu den Chroniken
+                Zurück zur Übersicht
               </Link>
               
-              <Link href={`/games/${game.id}/edit`} className="btn btn-primary font-serif">
+              <Link href={`/games/${game.id}/logs`} className="btn btn-primary font-serif">
                 <span className="mr-2">✦</span>
                 Diese Saga fortführen
                 <span className="ml-2">✦</span>
