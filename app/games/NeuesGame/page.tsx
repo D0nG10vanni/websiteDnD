@@ -53,7 +53,7 @@ export default function NewGamePage() {
         <div className="card w-full max-w-md mx-auto bg-base-100 shadow-xl border border-primary/20">
           <div className="card-body">
             <h1 className="card-title text-2xl font-serif text-center mx-auto mb-6">
-              <span className="text-primary">✦</span> Eine neue Saga beginnt <span className="text-primary">✦</span>
+              <span className="text-primary">✦</span> Eine neue Kampagne beginnen <span className="text-primary">✦</span>
             </h1>
             
             <div className="divider">✧ ✦ ✧</div>
@@ -61,12 +61,12 @@ export default function NewGamePage() {
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="form-control w-full">
                 <label htmlFor="name" className="label">
-                  <span className="label-text font-serif">Name der Saga</span>
+                  <span className="label-text font-serif">Name der Kampagne</span>
                 </label>
                 <input
                   id="name"
                   type="text"
-                  placeholder="z.B. Die Legende von Grimmwald"
+                  placeholder="z.B. Zeit des Sturms"
                   className="input input-bordered input-primary w-full bg-base-200 font-serif"
                   value={name}
                   onChange={e => setName(e.target.value)}
@@ -75,28 +75,16 @@ export default function NewGamePage() {
 
               <div className="form-control w-full">
                 <label htmlFor="password" className="label">
-                  <span className="label-text font-serif">Passwort</span>
+                  <span className="label-text font-serif">Geheime Losung</span>
                 </label>
                 <input
                   id="password"
                   type="password"
-                  placeholder="Setze ein Passwort für deine Saga"
+                  placeholder="Das Passwort ist als Schutz gegen trolling gedacht"
                   className="input input-bordered input-primary w-full bg-base-200 font-serif"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                 />
-              </div>
-
-              <div className="form-control">
-                <label className="cursor-pointer label font-serif">
-                  <span className="label-text">Ist diese Saga aktiv?</span>
-                  <input
-                    type="checkbox"
-                    className="toggle toggle-primary"
-                    checked={active}
-                    onChange={e => setActive(e.target.checked)}
-                  />
-                </label>
               </div>
 
               {error && (
