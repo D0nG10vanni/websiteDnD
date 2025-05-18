@@ -6,8 +6,7 @@ import Link from 'next/link'
 type Props = { params: { id: string } }
 
 export default async function Page({ params }: Props) {
-  const { id } = params
-  const gameId = parseInt(id, 10)
+  const gameId = parseInt(params.id, 10)
   const articles = await fetchArticlesByGameId(gameId)
   const game = await fetchGameById(gameId)
 
@@ -25,7 +24,9 @@ export default async function Page({ params }: Props) {
             <h1 className="card-title text-xl font-serif text-center mx-auto mb-3">
               <span className="text-primary">✧</span> Es gibt {articles.length} Artikel zum Spiel "{game ? game.name : 'Unbekannt'}" <span className="text-primary">✧</span>
             </h1>
-            <ArticleBrowser initialArticles={articles} />
+            <ArticleBrowser 
+                initialArticles={articles}
+                gameId={gameId} />
               <div className="flex flex-col sm:flex-row gap-4 mt-4 w-full justify-center items-center">
                 <Link
                   href="/games/[gameId]"

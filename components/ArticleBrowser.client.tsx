@@ -11,9 +11,10 @@ import Link from 'next/link'
 
 interface Props {
   initialArticles: Post[]
+  gameId?: number // ist aktuell noch optional, da ich in data database null values habe
 }
 
-export default function ArticleBrowser({ initialArticles }: Props) {
+export default function ArticleBrowser({ initialArticles, gameId }: Props) {
   const [articles] = useState<Post[]>(initialArticles)
   const [folders, setFolders] = useState<Folder[]>([])
   const [selected, setSelected] = useState<Post | null>(null)
@@ -21,16 +22,17 @@ export default function ArticleBrowser({ initialArticles }: Props) {
   const [isLoading, setIsLoading] = useState(false)
   const [query, setQuery] = useState<string>('')
 
-  // 1) Lade alle Ordner für den Baum
+  // 1) Lade alle Ordner für den jeweiligen Baum des Spiels
   useEffect(() => {
     ;(async () => {
       const { data, error } = await supabase
         .from('folders')
         .select('*')
+        .eq('game_id', gameId)  // ← Filter nach game_id
       if (error) console.error(error)
       else setFolders(data || [])
     })()
-  }, [])
+  }, [gameId])
 
   // 2) Suche anwenden
   const filtered = useMemo(
