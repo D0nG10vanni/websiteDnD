@@ -3,8 +3,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import rehypeRaw from 'rehype-raw'
-import rehypeHighlight from 'rehype-highlight'
 import { supabase } from '@/lib/supabaseClient'
 import type { Post, Folder } from '@/lib/types'
 import Link from 'next/link'
@@ -15,12 +13,23 @@ interface Props {
 }
 
 export default function ArticleBrowser({ initialArticles, gameId }: Props) {
-  const [articles] = useState<Post[]>(initialArticles)
+  const [articles, setArticles] = useState<Post[]>(initialArticles)
   const [folders, setFolders] = useState<Folder[]>([])
   const [selected, setSelected] = useState<Post | null>(null)
   const [content, setContent] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [query, setQuery] = useState<string>('')
+  const [deleteMode, setDeleteMode] = useState(false)
+
+  const handleDelete = async (id: number) => {  
+  const { error } = await supabase.from('posts').delete().eq('id', id)
+  if (error) {
+    console.error('Fehler beim Löschen:', error)
+  } else {
+    setArticles((prev) => prev.filter((a) => a.id !== id))
+    if (selected?.id === id) setSelected(null)
+  }
+}
 
   // 1) Lade alle Ordner für den jeweiligen Baum des Spiels
   useEffect(() => {
@@ -64,6 +73,7 @@ export default function ArticleBrowser({ initialArticles, gameId }: Props) {
         )
       } else {
         setContent(data.content)
+        console.log('Content loaded:', data.content)
       }
       setIsLoading(false)
     })()
@@ -109,15 +119,26 @@ export default function ArticleBrowser({ initialArticles, gameId }: Props) {
         </h3>
         <ul className="space-y-2 ml-4">
           {items.map((a) => (
-            <li key={a.id}>
-              <button
-                onClick={() => setSelected(a)}
-                className={`font-serif text-sm w-full text-left py-1 hover:text-amber-200 ${
-                  selected?.id === a.id ? 'text-amber-200' : 'text-amber-300/70'
-                }`}
-              >
-                <span className="text-amber-500/70 mr-1">✦</span> {a.title}
-              </button>
+            <li key={a.id} className="flex items-center gap-2">
+              <div className="truncate flex-1 min-w-0">
+                <button
+                  onClick={() => setSelected(a)}
+                  className={`w-full text-left truncate font-serif text-sm py-1 hover:text-amber-200 ${
+                    selected?.id === a.id ? 'text-amber-200' : 'text-amber-300/70'
+                  }`}
+                >
+                  <span className="text-amber-500/70 mr-1">✦</span> {a.title}
+                </button>
+              </div>
+              {deleteMode && (
+                <button
+                  onClick={() => handleDelete(a.id)}
+                  className="btn btn-xs btn-outline btn-error shrink-0 tooltip tooltip-left"
+                  data-tip="Löschen"
+                >
+                  🗑️  
+                </button>
+              )}
             </li>
           ))}
         </ul>
@@ -131,10 +152,11 @@ export default function ArticleBrowser({ initialArticles, gameId }: Props) {
   }
 
   return (
-    <div className="flex flex-col lg:flex-row gap-8">
+    <div className="flex flex-col lg:flex-row gap-6">
       {/* Sidebar */}
       <aside className="w-full lg:w-1/3 bg-black/40 backdrop-blur-sm rounded-lg border border-amber-900/40 p-5 overflow-y-auto max-h-[60vh]">
         <h2 className="font-serif text-center text-xl text-amber-200 mb-6">
+          
           <span className="text-amber-500">❖</span> ENCYCLOPAEDIA <span className="text-amber-500">❖</span>
         </h2>
         {/* Suche */}
@@ -181,6 +203,22 @@ export default function ArticleBrowser({ initialArticles, gameId }: Props) {
             Neues Wissen verewigen
           </Link>
         </div>
+        {/* Löschen-Checkbox */}
+        <br/>
+        <div className="text-center text-amber-200/50 font-serif text-xs italic mb-2">
+            Artikel löschen? Aktiviere den Modus:
+        </div>
+        <div className="flex items-center justify-center mb-4">
+            <label className="label cursor-pointer">
+              <input
+                type="checkbox"
+                className="toggle toggle-error toggle-sm"
+                checked={deleteMode}
+                onChange={(e) => setDeleteMode(e.target.checked)}
+              />
+              <span className="label-text mr-3 text-amber-200 font-serif text-sm">🗑️</span>
+            </label>
+          </div>
       </aside>
 
       {/* Content-Bereich */}
@@ -205,8 +243,10 @@ export default function ArticleBrowser({ initialArticles, gameId }: Props) {
               <span className="text-amber-500 ml-3">❖</span>
             </h2>
 
-            <article className="prose prose-invert max-w-none prose-headings:text-amber-300 prose-p:text-amber-100 prose-a:text-amber-400 hover:prose-a:text-amber-300 prose-strong:text-amber-200 prose-em:text-amber-200">
-              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw, rehypeHighlight]}
+            <article className="prose prose-invert prose-xl leading-relaxed max-w-none
+                                prose-headings:text-amber-300 prose-p:text-amber-100 prose-a:text-amber-400
+                                hover:prose-a:text-amber-300 prose-strong:text-amber-200 prose-em:text-amber-200">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}
               >
                 {content}
               </ReactMarkdown>
