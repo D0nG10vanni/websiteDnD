@@ -197,10 +197,24 @@ export default function ArticleBrowser({ initialArticles, gameId }: Props) {
 
         <div className="mt-4 text-center">
           <Link
-            href="/ArticleView/NeuerArtikel"
+            href={{
+              pathname: "/games/[id]/ArticleView/NeuerArtikel",
+              query: { id: gameId }
+            }}
+            as={`/games/${gameId}/ArticleView/NeuerArtikel`}
             className="inline-block px-4 py-2 border border-amber-900/40 rounded-sm font-serif text-xs text-amber-200/80 bg-amber-900/10 hover:bg-amber-900/30"
           >
-            Neues Wissen verewigen
+            Neuen Artikel erstellen
+          </Link>
+          <Link
+            href={{
+              pathname: "/games/[id]/ArticleView/Ordnerstruktur",
+              query: { id: gameId }
+            }}
+            as={`/games/${gameId}/ArticleView/Ordnerstruktur`}
+            className="inline-block px-4 py-2 border border-amber-900/40 rounded-sm font-serif text-xs text-amber-200/80 bg-amber-900/10 hover:bg-amber-900/30"
+          >
+            Systematisierung modifizieren
           </Link>
         </div>
         {/* Löschen-Checkbox */}
