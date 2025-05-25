@@ -8,16 +8,26 @@ import type { Post, Folder } from '@/lib/types'
 import Link from 'next/link'
 
 interface Props {
-  initialArticles: Post[]
+  articles: Post[]
   gameId: number
+  isLoading: boolean
+  onDeleteArticle: (id: number) => Promise<boolean>
+  onAddArticle: (article: Post) => void
+  onUpdateArticle: (article: Post) => void
 }
 
-export default function ArticleBrowser({ initialArticles, gameId }: Props) {
-  const [articles, setArticles] = useState<Post[]>(initialArticles)
+export default function ArticleBrowser({ 
+  articles, 
+  gameId, 
+  isLoading: articlesLoading,
+  onDeleteArticle,
+  onAddArticle,
+  onUpdateArticle 
+}: Props) {
   const [folders, setFolders] = useState<Folder[]>([])
   const [selected, setSelected] = useState<Post | null>(null)
   const [content, setContent] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoadingContent, setIsLoadingContent] = useState(false)
   const [query, setQuery] = useState<string>('')
   const [deleteMode, setDeleteMode] = useState(false)
 
@@ -34,12 +44,10 @@ export default function ArticleBrowser({ initialArticles, gameId }: Props) {
   }, [gameId])
 
   const handleDelete = async (id: number) => {
-    const { error } = await supabase.from('posts').delete().eq('id', id)
-    if (error) {
-      console.error('Fehler beim Löschen:', error)
-    } else {
-      setArticles((prev) => prev.filter((a) => a.id !== id))
-      if (selected?.id === id) setSelected(null)
+    const success = await onDeleteArticle(id);
+    if (success && selected?.id === id) {
+      setSelected(null);
+      setContent(null);
     }
   }
 
@@ -57,7 +65,7 @@ export default function ArticleBrowser({ initialArticles, gameId }: Props) {
   useEffect(() => {
     if (!selected) return
     setContent(null)
-    setIsLoading(true)
+    setIsLoadingContent(true)
     ;(async () => {
       const { data, error } = await supabase
         .from('posts')
@@ -70,9 +78,17 @@ export default function ArticleBrowser({ initialArticles, gameId }: Props) {
       } else {
         setContent(data.content)
       }
-      setIsLoading(false)
+      setIsLoadingContent(false)
     })()
   }, [selected])
+
+  // Reset selected article if it was deleted
+  useEffect(() => {
+    if (selected && !articles.find(a => a.id === selected.id)) {
+      setSelected(null);
+      setContent(null);
+    }
+  }, [articles, selected]);
 
   const folderMap = useMemo(() => {
     const map: Record<number, Folder & { children: Folder[] }> = {}
@@ -92,18 +108,20 @@ export default function ArticleBrowser({ initialArticles, gameId }: Props) {
   const articlesByFolder = useMemo(() => {
     const m: Record<number, Post[]> = {}
     filtered.forEach((a) => {
-      if (a.folder_id != null) {
-        m[a.folder_id] = m[a.folder_id] || []
-        m[a.folder_id].push(a)
+      const id = a.folder_id ? Number(a.folder_id) : 0
+      if (!isNaN(id)) {
+        m[id] = m[id] || []
+        m[id].push(a)
       }
     })
     return m
   }, [filtered])
 
-  const uncategorized = filtered.filter((a) => a.folder_id == null)
+  const uncategorized = filtered.filter((a) => !a.folder_id)
 
   const renderFolder = (f: Folder & { children: Folder[] }) => {
     const items = articlesByFolder[f.id] || []
+
     return (
       <div key={f.id} className="mb-6">
         <h3 className="font-serif text-lg text-amber-500 mb-2 border-b border-amber-900/30 pb-1">
@@ -139,6 +157,7 @@ export default function ArticleBrowser({ initialArticles, gameId }: Props) {
             {f.children.map((child) => renderFolder(folderMap[child.id]))}
           </div>
         )}
+        
       </div>
     )
   }
@@ -158,26 +177,55 @@ export default function ArticleBrowser({ initialArticles, gameId }: Props) {
           className="w-full mb-6 bg-black/50 border border-amber-900/50 rounded-sm px-4 py-2 text-amber-100 placeholder-amber-200/30 font-serif text-sm focus:outline-none focus:ring-1 focus:ring-amber-700/50"
         />
 
-        {rootFolders.map((f) => renderFolder(folderMap[f.id]))}
-
-        {uncategorized.length > 0 && (
-          <div className="mb-6">
-            <h3 className="font-serif text-lg text-amber-500 mb-2 border-b border-amber-900/30 pb-1">
-              <span className="text-amber-700">♦</span> Unkategorisiert
-            </h3>
-            <ul className="space-y-2 ml-4">
-              {uncategorized.map((a) => (
-                <li key={a.id}>
-                  <button
-                    onClick={() => setSelected(a)}
-                    className="font-serif text-sm text-amber-300/70 hover:text-amber-200"
-                  >
-                    <span className="text-amber-500/70 mr-1">✦</span> {a.title}
-                  </button>
-                </li>
-              ))}
-            </ul>
+        {articlesLoading ? (
+          <div className="text-center py-8 text-amber-200/50 italic font-serif">
+            Die alten Schriften werden aus den Archiven geholt…
           </div>
+        ) : (
+          <>
+            {(rootFolders.length > 0 ? rootFolders : folders).map((f) =>
+              renderFolder(folderMap[f.id])
+            )}
+
+            {uncategorized.length > 0 && (
+              <div className="mb-6">
+                <h3 className="font-serif text-lg text-amber-500 mb-2 border-b border-amber-900/30 pb-1">
+                  <span className="text-amber-700">♦</span> Unkategorisiert
+                </h3>
+                <ul className="space-y-2 ml-4">
+                  {uncategorized.map((a) => (
+                    <li key={a.id} className="flex items-center gap-2">
+                      <div className="truncate flex-1 min-w-0">
+                        <button
+                          onClick={() => setSelected(a)}
+                          className={`w-full text-left truncate font-serif text-sm py-1 hover:text-amber-200 ${
+                            selected?.id === a.id ? 'text-amber-200' : 'text-amber-300/70'
+                          }`}
+                        >
+                          <span className="text-amber-500/70 mr-1">✦</span> {a.title}
+                        </button>
+                      </div>
+                      {deleteMode && (
+                        <button
+                          onClick={() => handleDelete(a.id)}
+                          className="btn btn-xs btn-outline btn-error shrink-0 tooltip tooltip-left"
+                          data-tip="Löschen"
+                        >
+                          🗑️
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {articles.length === 0 && (
+              <div className="text-center py-8 text-amber-200/50 italic font-serif">
+                Noch keine Schriften in diesem Archiv vorhanden.
+              </div>
+            )}
+          </>
         )}
 
         <div className="mt-4 text-center space-y-2">
@@ -217,12 +265,12 @@ export default function ArticleBrowser({ initialArticles, gameId }: Props) {
             Wähle eine der Schriften aus, um ihre Geheimnisse zu enthüllen.
           </div>
         )}
-        {selected && isLoading && (
+        {selected && isLoadingContent && (
           <div className="text-center py-16 text-amber-200/50 italic font-serif">
             Die mystischen Runen enthüllen sich langsam…
           </div>
         )}
-        {selected && content && !isLoading && (
+        {selected && content && !isLoadingContent && (
           <>
             <h2 className="font-serif text-2xl text-center mb-6 text-amber-200 tracking-wider">
               <span className="text-amber-500 mr-3">❖</span>
