@@ -3,7 +3,7 @@ import Link from "next/link";
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-base-200" data-theme="fantasy">
+    <div className="min-h-screen bg-base-200">
       <div className="max-w-4xl mx-auto p-6 pt-16">
         <div className="card w-full bg-base-100 shadow-xl border border-primary/20">
           <div className="card-body">

@@ -29,7 +29,7 @@ export default function RootLayout({
   const [supabaseClient] = useState(() => createBrowserSupabaseClient());
 
   return (
-    <html lang="en">
+    <html lang="en" data-theme="dark">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <SessionContextProvider supabaseClient={supabaseClient}>
           <AuthProvider>

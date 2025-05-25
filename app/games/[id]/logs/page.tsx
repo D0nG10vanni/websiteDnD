@@ -15,6 +15,8 @@ export default function CombinedPage() {
   useEffect(() => {
     if (!gameId) return;
 
+    console.log('Lade Artikel für Spiel mit ID:', gameId);
+
     (async () => {
       const { data, error } = await supabase
         .from('posts')
@@ -24,10 +26,14 @@ export default function CombinedPage() {
       if (error) {
         console.error('Fehler beim Laden der Artikel:', error);
       } else {
+        console.log('Supabase result:', { data, error })
         setArticles(data || []);
+        console.log('Geladene Artikel:', data);
+        console.table(data);
+        
       }
     })();
-  }, [gameId]);
+  }, [gameId]); 
 
   return (
     <div className="min-h-screen bg-base-200 p-6 flex flex-col lg:flex-row gap-6" data-theme="fantasy">

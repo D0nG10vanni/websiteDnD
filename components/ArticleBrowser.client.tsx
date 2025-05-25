@@ -9,7 +9,7 @@ import Link from 'next/link'
 
 interface Props {
   initialArticles: Post[]
-  gameId?: number // ist aktuell noch optional, da ich in data database null values habe
+  gameId: number
 }
 
 export default function ArticleBrowser({ initialArticles, gameId }: Props) {
@@ -21,29 +21,28 @@ export default function ArticleBrowser({ initialArticles, gameId }: Props) {
   const [query, setQuery] = useState<string>('')
   const [deleteMode, setDeleteMode] = useState(false)
 
-  const handleDelete = async (id: number) => {  
-  const { error } = await supabase.from('posts').delete().eq('id', id)
-  if (error) {
-    console.error('Fehler beim Löschen:', error)
-  } else {
-    setArticles((prev) => prev.filter((a) => a.id !== id))
-    if (selected?.id === id) setSelected(null)
-  }
-}
-
-  // 1) Lade alle Ordner für den jeweiligen Baum des Spiels
   useEffect(() => {
+    if (!gameId) return
     ;(async () => {
       const { data, error } = await supabase
         .from('folders')
         .select('*')
-        .eq('game_id', gameId)  // ← Filter nach game_id
-      if (error) console.error(error)
+        .eq('game_id', gameId)
+      if (error) console.error('Fehler beim Laden der Ordner:', error)
       else setFolders(data || [])
     })()
   }, [gameId])
 
-  // 2) Suche anwenden
+  const handleDelete = async (id: number) => {
+    const { error } = await supabase.from('posts').delete().eq('id', id)
+    if (error) {
+      console.error('Fehler beim Löschen:', error)
+    } else {
+      setArticles((prev) => prev.filter((a) => a.id !== id))
+      if (selected?.id === id) setSelected(null)
+    }
+  }
+
   const filtered = useMemo(
     () =>
       articles.filter((a) =>
@@ -55,7 +54,6 @@ export default function ArticleBrowser({ initialArticles, gameId }: Props) {
     [articles, query]
   )
 
-  // 3) Markdown-Content laden, wenn ausgewählt
   useEffect(() => {
     if (!selected) return
     setContent(null)
@@ -68,18 +66,14 @@ export default function ArticleBrowser({ initialArticles, gameId }: Props) {
         .single()
       if (error) {
         console.error(error)
-        setContent(
-          '*Die Zeichen verblassen vor deinen Augen… Die alten Mächte verweigern dir dieses Wissen.*'
-        )
+        setContent('*Die Zeichen verblassen vor deinen Augen…*')
       } else {
         setContent(data.content)
-        console.log('Content loaded:', data.content)
       }
       setIsLoading(false)
     })()
   }, [selected])
 
-  // 4) Baum-Struktur aufbauen: map + children
   const folderMap = useMemo(() => {
     const map: Record<number, Folder & { children: Folder[] }> = {}
     folders.forEach((f) => {
@@ -95,7 +89,6 @@ export default function ArticleBrowser({ initialArticles, gameId }: Props) {
 
   const rootFolders = useMemo(() => folders.filter((f) => f.parent_id == null), [folders])
 
-  // 5) Artikel pro Ordner sammeln
   const articlesByFolder = useMemo(() => {
     const m: Record<number, Post[]> = {}
     filtered.forEach((a) => {
@@ -109,7 +102,6 @@ export default function ArticleBrowser({ initialArticles, gameId }: Props) {
 
   const uncategorized = filtered.filter((a) => a.folder_id == null)
 
-  // 6) Rekursives Rendern der Ordner
   const renderFolder = (f: Folder & { children: Folder[] }) => {
     const items = articlesByFolder[f.id] || []
     return (
@@ -136,7 +128,7 @@ export default function ArticleBrowser({ initialArticles, gameId }: Props) {
                   className="btn btn-xs btn-outline btn-error shrink-0 tooltip tooltip-left"
                   data-tip="Löschen"
                 >
-                  🗑️  
+                  🗑️
                 </button>
               )}
             </li>
@@ -153,28 +145,21 @@ export default function ArticleBrowser({ initialArticles, gameId }: Props) {
 
   return (
     <div className="flex flex-col lg:flex-row gap-6">
-      {/* Sidebar */}
       <aside className="w-full lg:w-1/3 bg-black/40 backdrop-blur-sm rounded-lg border border-amber-900/40 p-5 overflow-y-auto max-h-[60vh]">
         <h2 className="font-serif text-center text-xl text-amber-200 mb-6">
-          
           <span className="text-amber-500">❖</span> ENCYCLOPAEDIA <span className="text-amber-500">❖</span>
         </h2>
-        {/* Suche */}
-        <div className="relative mb-6">
-          <input
-            type="text"
-            placeholder="Durchsuche die alten Texte…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="w-full bg-black/50 border border-amber-900/50 rounded-sm px-4 py-2 text-amber-100 placeholder-amber-200/30 font-serif text-sm focus:outline-none focus:ring-1 focus:ring-amber-700/50"
-          />
-          <div className="absolute right-3 top-2 text-amber-500/50">✧</div>
-        </div>
 
-        {/* Ordner & Artikel */}
+        <input
+          type="text"
+          placeholder="Durchsuche die alten Texte…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="w-full mb-6 bg-black/50 border border-amber-900/50 rounded-sm px-4 py-2 text-amber-100 placeholder-amber-200/30 font-serif text-sm focus:outline-none focus:ring-1 focus:ring-amber-700/50"
+        />
+
         {rootFolders.map((f) => renderFolder(folderMap[f.id]))}
 
-        {/* Unkategorisierte Artikel */}
         {uncategorized.length > 0 && (
           <div className="mb-6">
             <h3 className="font-serif text-lg text-amber-500 mb-2 border-b border-amber-900/30 pb-1">
@@ -195,60 +180,48 @@ export default function ArticleBrowser({ initialArticles, gameId }: Props) {
           </div>
         )}
 
-        <div className="mt-4 text-center">
+        <div className="mt-4 text-center space-y-2">
           <Link
-            href={{
-              pathname: "/games/[id]/ArticleView/NeuerArtikel",
-              query: { id: gameId }
-            }}
-            as={`/games/${gameId}/ArticleView/NeuerArtikel`}
+            href={`/games/${gameId}/ArticleView/NeuerArtikel`}
             className="inline-block px-4 py-2 border border-amber-900/40 rounded-sm font-serif text-xs text-amber-200/80 bg-amber-900/10 hover:bg-amber-900/30"
           >
             Neuen Artikel erstellen
           </Link>
           <Link
-            href={{
-              pathname: "/games/[id]/ArticleView/Ordnerstruktur",
-              query: { id: gameId }
-            }}
-            as={`/games/${gameId}/ArticleView/Ordnerstruktur`}
+            href={`/games/${gameId}/ArticleView/Ordnerstruktur`}
             className="inline-block px-4 py-2 border border-amber-900/40 rounded-sm font-serif text-xs text-amber-200/80 bg-amber-900/10 hover:bg-amber-900/30"
           >
             Systematisierung modifizieren
           </Link>
         </div>
-        {/* Löschen-Checkbox */}
-        <br/>
-        <div className="text-center text-amber-200/50 font-serif text-xs italic mb-2">
-            Artikel löschen? Aktiviere den Modus:
+
+        <div className="text-center text-amber-200/50 font-serif text-xs italic mt-4">
+          Artikel löschen? Aktiviere den Modus:
         </div>
         <div className="flex items-center justify-center mb-4">
-            <label className="label cursor-pointer">
-              <input
-                type="checkbox"
-                className="toggle toggle-error toggle-sm"
-                checked={deleteMode}
-                onChange={(e) => setDeleteMode(e.target.checked)}
-              />
-              <span className="label-text mr-3 text-amber-200 font-serif text-sm">🗑️</span>
-            </label>
-          </div>
+          <label className="label cursor-pointer">
+            <input
+              type="checkbox"
+              className="toggle toggle-error toggle-sm"
+              checked={deleteMode}
+              onChange={(e) => setDeleteMode(e.target.checked)}
+            />
+            <span className="label-text mr-3 text-amber-200 font-serif text-sm">🗑️</span>
+          </label>
+        </div>
       </aside>
 
-      {/* Content-Bereich */}
       <section className="w-full lg:w-2/3 bg-black/20 backdrop-blur-sm rounded-lg border border-amber-900/30 shadow-[0_0_20px_rgba(0,0,0,0.5)] p-8">
         {!selected && (
           <div className="text-center py-16 text-amber-200/50 italic font-serif">
             Wähle eine der Schriften aus, um ihre Geheimnisse zu enthüllen.
           </div>
         )}
-
         {selected && isLoading && (
           <div className="text-center py-16 text-amber-200/50 italic font-serif">
             Die mystischen Runen enthüllen sich langsam…
           </div>
         )}
-
         {selected && content && !isLoading && (
           <>
             <h2 className="font-serif text-2xl text-center mb-6 text-amber-200 tracking-wider">
@@ -256,16 +229,13 @@ export default function ArticleBrowser({ initialArticles, gameId }: Props) {
               {selected.title}
               <span className="text-amber-500 ml-3">❖</span>
             </h2>
-
             <article className="prose prose-invert prose-xl leading-relaxed max-w-none
                                 prose-headings:text-amber-300 prose-p:text-amber-100 prose-a:text-amber-400
                                 hover:prose-a:text-amber-300 prose-strong:text-amber-200 prose-em:text-amber-200">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}
-              >
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
                 {content}
               </ReactMarkdown>
             </article>
-
             <div className="text-center text-xs text-amber-200/40 font-serif italic mt-4">
               Aus dem Kodex, Folio {selected.id}
             </div>
