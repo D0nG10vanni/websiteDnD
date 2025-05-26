@@ -5,7 +5,7 @@ import "./globals.css";
 import { AuthProvider } from "@/lib/AuthContext";
 import Header from "../components/header";
 
-import { createBrowserSupabaseClient } from '@supabase/auth-helpers-nextjs';
+import { createPagesBrowserClient } from '@supabase/auth-helpers-nextjs';
 import { SessionContextProvider } from '@supabase/auth-helpers-react';
 import { useState } from 'react';
 
@@ -19,14 +19,21 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-// export const metadata removed because it is not supported in client components
-
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const [supabaseClient] = useState(() => createBrowserSupabaseClient());
+
+  const [supabaseClient] = useState(() =>
+  createPagesBrowserClient({
+    supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    options: {
+      // You can add valid options here if needed
+    },
+  })
+);
 
   return (
     <html lang="en" data-theme="dark">

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { supabase } from '@/lib/supabaseClient';
+import { useSupabaseClient } from '@supabase/auth-helpers-react';
 import ArticleBrowser from '@/components/ArticleBrowser.client';
 import Logs from '@/components/Logs.client';
 import type { Post } from '@/lib/types';
@@ -10,8 +10,11 @@ import type { Post } from '@/lib/types';
 export default function CombinedPage() {
   const params = useParams();
   const gameId = parseInt(params?.id as string, 10);
+  const supabase = useSupabaseClient();
+
   const [articles, setArticles] = useState<Post[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'articles' | 'logs'>('logs');
 
   useEffect(() => {
     if (!gameId || isNaN(gameId)) return;
@@ -28,14 +31,12 @@ export default function CombinedPage() {
       if (error) {
         console.error('Fehler beim Laden der Artikel:', error);
       } else {
-        console.log('Supabase result:', { data, error });
+        console.log('Geladene Artikel:', data?.length);
         setArticles(data || []);
-        console.log('Geladene Artikel:', data);
-        console.table(data);
       }
       setIsLoading(false);
     })();
-  }, [gameId]);
+  }, [gameId, supabase]);
 
   const handleDeleteArticle = async (id: number) => {
     const { error } = await supabase.from('posts').delete().eq('id', id);
@@ -53,8 +54,8 @@ export default function CombinedPage() {
   };
 
   const handleUpdateArticle = (updatedArticle: Post) => {
-    setArticles((prev) => 
-      prev.map((article) => 
+    setArticles((prev) =>
+      prev.map((article) =>
         article.id === updatedArticle.id ? updatedArticle : article
       )
     );
@@ -72,19 +73,73 @@ export default function CombinedPage() {
   }
 
   return (
-    <div className="min-h-screen bg-base-200 p-6 flex flex-col lg:flex-row gap-6" data-theme="fantasy">
-      <div className="w-full lg:w-1/2">
-        <ArticleBrowser 
-          articles={articles}
-          gameId={gameId}
-          isLoading={isLoading}
-          onDeleteArticle={handleDeleteArticle}
-          onAddArticle={handleAddArticle}
-          onUpdateArticle={handleUpdateArticle}
-        />
+    <div className="min-h-screen bg-base-200" data-theme="fantasy">
+      {/* Tab-Leiste mit Animation */}
+      <div className="flex justify-center py-6 gap-8 text-lg">
+        <button
+          className={`transition-all duration-300 hover:scale-110 ${
+            activeTab === 'logs'
+              ? 'underline text-primary font-bold transform scale-105'
+              : 'text-gray-400 hover:text-gray-600'
+          }`}
+          onClick={() => setActiveTab('logs')}
+        >
+          Logs
+        </button>
+        <button
+          className={`transition-all duration-300 hover:scale-110 ${
+            activeTab === 'articles'
+              ? 'underline text-accent font-bold transform scale-105'
+              : 'text-gray-400 hover:text-gray-600'
+          }`}
+          onClick={() => setActiveTab('articles')}
+        >
+          Artikel
+        </button>
       </div>
-      <div className="w-full lg:w-1/2">
-        <Logs gameId={gameId.toString()} />
+
+      {/* Content Area */}
+      <div className="px-6 relative">
+        <div className="relative overflow-hidden">
+          {/* Logs Tab */}
+          <div
+            className={`w-full bg-base-100 p-6 rounded-lg shadow-md transition-all duration-700 ease-in-out transform ${
+              activeTab === 'logs'
+                ? 'opacity-100 translate-x-0 scale-100'
+                : 'opacity-0 translate-x-8 scale-95 pointer-events-none absolute top-0 left-0'
+            }`}
+          >
+            <h2 className="text-2xl font-bold mb-4 bg-gradient-to-r from-accent to-info bg-clip-text text-transparent">
+              Logs
+            </h2>
+            <div className="overflow-x-auto">
+              <Logs gameId={gameId.toString()} />
+            </div>
+          </div>
+
+          {/* Artikel Tab */}
+          <div
+            className={`w-full bg-base-100 p-6 rounded-lg shadow-md transition-all duration-700 ease-in-out transform ${
+              activeTab === 'articles'
+                ? 'opacity-100 translate-x-0 scale-100'
+                : 'opacity-0 translate-x-8 scale-95 pointer-events-none absolute top-0 left-0'
+            }`}
+          >
+            <h2 className="text-2xl font-bold mb-4 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+              Artikelübersicht
+            </h2>
+            <div className="overflow-x-auto">
+              <ArticleBrowser
+                articles={articles}
+                gameId={gameId}
+                isLoading={isLoading}
+                onDeleteArticle={handleDeleteArticle}
+                onAddArticle={handleAddArticle}
+                onUpdateArticle={handleUpdateArticle}
+              />
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

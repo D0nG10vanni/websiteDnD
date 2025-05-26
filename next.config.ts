@@ -11,8 +11,7 @@ const nextConfig = {
     serverComponentsExternalPackages: ['fs'],
   },
   // Stellen Sie sicher, dass Server-Komponenten richtig funktionieren
-  reactStrictMode: true,
-  swcMinify: true,
+  reactStrictMode: false,
   // Erlauben Sie die Verwendung von fs-Modul in API-Routen
   webpack: (config: import('webpack').Configuration, { isServer }: { isServer: boolean }) => {
     if (!isServer) {

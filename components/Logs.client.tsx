@@ -1,9 +1,7 @@
-// components/Logs.client.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useUser, useSession } from '@supabase/auth-helpers-react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { supabase } from '@/lib/supabaseClient'; // Gleicher Import wie ArticleBrowser
 
 interface Log {
   id: number;
@@ -14,10 +12,6 @@ interface Log {
 }
 
 export default function Logs({ gameId }: { gameId: string }) {
-  const supabase = createClientComponentClient();
-  const session = useSession();
-  const user = useUser();
-
   const [logs, setLogs] = useState<Log[]>([]);
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(false);
@@ -25,10 +19,10 @@ export default function Logs({ gameId }: { gameId: string }) {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    if (user && gameId) {
+    if (gameId) {
       fetchLogs(gameId);
     }
-  }, [user, gameId]);
+  }, [gameId]);
 
   async function fetchLogs(gameId: string) {
     setFetching(true);
@@ -40,15 +34,12 @@ export default function Logs({ gameId }: { gameId: string }) {
 
     if (error) {
       console.error('Fehler beim Laden der Logs:', error);
-      if (user) {
-        console.log(user.id);
-      }
       setErrorMsg('Fehler beim Laden der Einträge.');
     } else {
       setLogs(
         (data || []).map((log: any) => ({
           id: log.id,
-          author: '', // Optional: Namen über zusätzliche Query holen
+          author: '',
           content: log.content,
           created_at: log.created_at,
           creator_id: log.creator_id,
@@ -59,7 +50,11 @@ export default function Logs({ gameId }: { gameId: string }) {
   }
 
   async function postLog(gameId: string, content: string) {
-    if (!user?.id) throw new Error('Kein Benutzer angemeldet.');
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    
+    if (userError || !user) {
+      throw new Error('Kein Benutzer angemeldet.');
+    }
 
     const { data, error } = await supabase
       .from('logs')
@@ -78,13 +73,13 @@ export default function Logs({ gameId }: { gameId: string }) {
 
     return {
       ...data,
-      author: '', // Placeholder
+      author: '',
     } as Log;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!content.trim() || !user?.id) return;
+    if (!content.trim()) return;
 
     setLoading(true);
     setErrorMsg(null);
@@ -97,10 +92,6 @@ export default function Logs({ gameId }: { gameId: string }) {
     }
     setLoading(false);
   };
-
-  if (!session || !user) {
-    return <div className="text-amber-200/70 font-serif">Bitte anmelden, um Einträge zu sehen.</div>;
-  }
 
   return (
     <div className="w-full lg:w-1/2">

@@ -114,6 +114,23 @@ export default function FolderManagerPage() {
     }
   }
 
+  const handleRenameFolder = async (folderId: number, newName: string) => {
+    if (!newName.trim()) return
+
+    const { error } = await supabase
+      .from('folders')
+      .update({ name: newName.trim() })
+      .eq('id', folderId)
+
+    if (!error) {
+      setFolders(prev => 
+        prev.map(f => f.id === folderId ? { ...f, name: newName.trim() } : f)
+      )
+    } else {
+      alert('Fehler beim Umbenennen: ' + error.message)
+    }
+  }
+
   const updateParentLocally = (draggedId: number, newParentId: number | null) => {
     // Prevent circular references
     if (newParentId !== null) {
@@ -175,6 +192,7 @@ export default function FolderManagerPage() {
         onDrop={(draggedId) => updateParentLocally(draggedId, folder.id)}
         onDropToRoot={(draggedId) => updateParentLocally(draggedId, null)}
         onDelete={() => handleDelete(folder.id)}
+        onRename={(newName) => handleRenameFolder(folder.id, newName)}
       >
         {renderFolders(folder.id, depth + 1)}
       </DraggableFolder>
@@ -183,7 +201,7 @@ export default function FolderManagerPage() {
 
   return (
     <DndProvider backend={HTML5Backend}>
-      <div className="min-h-screen bg-gradient-to-br from-amber-950/20 via-black to-amber-900/10 p-6">
+      <div className="min-h-screen">
         <div className="max-w-2xl mx-auto">
           {/* Header */}
           <div className="text-center mb-8">
@@ -283,6 +301,7 @@ function DraggableFolder({
   onDrop,
   onDropToRoot,
   onDelete,
+  onRename,
 }: {
   folder: Folder
   depth: number
@@ -291,8 +310,12 @@ function DraggableFolder({
   onDrop: (draggedId: number) => void
   onDropToRoot: (draggedId: number) => void
   onDelete: () => void
+  onRename: (newName: string) => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editName, setEditName] = useState(folder.name)
+  const [isHovered, setIsHovered] = useState(false)
 
   const [, drop] = useDrop({
     accept: ItemType,
@@ -313,26 +336,92 @@ function DraggableFolder({
 
   drag(drop(ref))
 
+  const handleEditStart = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setIsEditing(true)
+    setEditName(folder.name)
+  }
+
+  const handleEditSave = () => {
+    if (editName.trim() && editName.trim() !== folder.name) {
+      onRename(editName.trim())
+    }
+    setIsEditing(false)
+  }
+
+  const handleEditCancel = () => {
+    setEditName(folder.name)
+    setIsEditing(false)
+  }
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleEditSave()
+    } else if (e.key === 'Escape') {
+      handleEditCancel()
+    }
+  }
+
   return (
     <div className="mb-3">
-      <div className="flex items-center gap-2" style={{ marginLeft: depth * 24 }}>
+      <div 
+        className="flex items-center gap-2" 
+        style={{ marginLeft: depth * 24 }}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
         <div
           ref={ref}
           className={`flex-1 p-3 font-serif border rounded-sm bg-black/30 border-amber-800/40 cursor-move transition-all duration-200 hover:bg-black/40 hover:border-amber-700/60 ${
             isDragging ? 'opacity-30 scale-95' : 'opacity-100'
+          } ${
+            isHovered && !isEditing && !deleteMode ? 'max-w-[calc(100%-0px)]' : 'max-w-full'
           }`}
+          style={{
+            transition: 'max-width 0.2s cubic-bezier(.4,0,.2,1), background 0.2s, border 0.2s',
+            maxWidth: isHovered && !isEditing && !deleteMode ? 'calc(100% - 80px)' : '100%',
+          }}
         >
           <div className="flex items-center gap-2">
             <span className="text-amber-500/80">
               {depth === 0 ? '📁' : '📂'}
             </span>
-            <span className="text-amber-200 text-sm">
-              {folder.name}
-            </span>
+            {isEditing ? (
+              <input
+                type="text"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                onKeyDown={handleKeyPress}
+                onBlur={handleEditSave}
+                className="bg-black/50 border border-amber-700/50 rounded-sm px-2 py-1 text-amber-200 text-sm font-serif focus:outline-none focus:ring-1 focus:ring-amber-600/50 flex-1"
+                autoFocus
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <span className="text-amber-200 text-sm truncate block">
+                {folder.name}
+              </span>
+            )}
           </div>
         </div>
+
+        {/* Edit button - appears on hover, folder shrinks to make space */}
+        <div className="relative w-6 flex justify-center">
+          {isHovered && !isEditing && !deleteMode && (
+            <button
+              onClick={handleEditStart}
+              className="ml-1 p-1 rounded-full bg-amber-900/30 hover:bg-amber-800/70 border border-amber-700/40 hover:border-amber-500/70 shadow-sm text-amber-400/80 hover:text-amber-200 transition-all duration-200 text-xs flex items-center justify-center"
+              title="Namen bearbeiten"
+              style={{ position: 'static' }}
+            >
+              <span className="material-symbols-outlined text-base" style={{ fontSize: 16, verticalAlign: 'middle' }}>
+                ✏️
+              </span>
+            </button>
+          )}
+        </div>
         
-        {deleteMode && (
+        {deleteMode && !isEditing && (
           <button
             onClick={onDelete}
             className="p-2 bg-red-900/20 border border-red-700/50 rounded-sm text-red-300 hover:bg-red-900/40 hover:border-red-600 transition-all duration-200 shrink-0"

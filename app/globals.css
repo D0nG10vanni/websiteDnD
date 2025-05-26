@@ -3,8 +3,8 @@
 @plugin "daisyui";
 
 :root {
-  --background: #b38383;
-  --foreground: #ededed;
+  --background: hsl(250, 24%, 19%);
+  --foreground: hsl(251, 23%, 32%);
 }
 
 @theme inline {
