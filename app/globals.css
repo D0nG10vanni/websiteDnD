@@ -2,9 +2,36 @@
 @tailwind utilities;
 @plugin "daisyui";
 
+/* Enhanced TTRPG Theme Variables */
 :root {
-  --background: hsl(250, 24%, 19%);
-  --foreground: hsl(251, 23%, 32%);
+  /* Dark theme with warm undertones */
+  --background: hsl(225, 25%, 8%);
+  --background-secondary: hsl(220, 20%, 12%);
+  --foreground: hsl(30, 15%, 85%);
+  --foreground-muted: hsl(30, 10%, 65%);
+  
+  /* TTRPG Color Palette */
+  --primary: hsl(20, 80%, 55%);
+  --primary-dark: hsl(15, 75%, 45%);
+  --accent: hsl(45, 90%, 60%);
+  --accent-dark: hsl(40, 85%, 50%);
+  
+  /* Atmospheric colors */
+  --ember-glow: hsla(25, 100%, 65%, 0.8);
+  --fire-core: hsla(15, 100%, 55%, 0.9);
+  --smoke: hsla(220, 15%, 25%, 0.6);
+  
+  /* Semantic colors */
+  --success: hsl(120, 50%, 50%);
+  --warning: hsl(40, 90%, 60%);
+  --error: hsl(0, 70%, 55%);
+  --info: hsl(200, 80%, 60%);
+  
+  /* Shadow and glow effects */
+  --shadow-ember: 0 4px 20px hsla(25, 100%, 50%, 0.15);
+  --shadow-deep: 0 8px 32px hsla(220, 40%, 5%, 0.6);
+  --glow-warm: 0 0 20px hsla(25, 100%, 65%, 0.3);
+  --glow-intense: 0 0 40px hsla(25, 100%, 65%, 0.6);
 }
 
 @theme inline {
@@ -12,10 +39,310 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-serif: 'Cinzel', 'Times New Roman', serif;
+}
+
+/* Enhanced Base Styles */
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  overflow-x: hidden;
 }
 
 body {
-  background: var(--background);
+  background: linear-gradient(135deg, var(--background) 0%, var(--background-secondary) 100%);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.6;
+  overflow-x: hidden;
+  position: relative;
+}
+
+/* Enhanced Typography */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-serif, 'Cinzel', serif);
+  font-weight: 600;
+  line-height: 1.2;
+  margin-bottom: 1rem;
+}
+
+h1 {
+  font-size: clamp(2rem, 5vw, 4rem);
+  font-weight: 700;
+}
+
+p {
+  margin-bottom: 1rem;
+  color: var(--foreground-muted);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--background);
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--primary), var(--accent));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, var(--primary-dark), var(--accent-dark));
+}
+
+/* Enhanced DaisyUI Theme Overrides */
+[data-theme="dark"] {
+  --b1: var(--background);
+  --b2: var(--background-secondary);
+  --b3: hsl(220, 18%, 16%);
+  --bc: var(--foreground);
+  --p: var(--primary);
+  --pc: hsl(0, 0%, 100%);
+  --s: hsl(200, 80%, 60%);
+  --sc: hsl(0, 0%, 100%);
+  --a: var(--accent);
+  --ac: hsl(220, 25%, 8%);
+  --n: hsl(220, 20%, 20%);
+  --nc: var(--foreground);
+  --in: var(--info);
+  --inc: hsl(0, 0%, 100%);
+  --su: var(--success);
+  --suc: hsl(0, 0%, 100%);
+  --wa: var(--warning);
+  --wac: hsl(220, 25%, 8%);
+  --er: var(--error);
+  --erc: hsl(0, 0%, 100%);
+}
+
+/* Enhanced Component Styles */
+.btn {
+  font-family: var(--font-serif);
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-ember);
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  border: none;
+  box-shadow: var(--glow-warm);
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, var(--primary-dark), var(--accent-dark));
+  box-shadow: var(--glow-intense);
+}
+
+.card {
+  backdrop-filter: blur(12px);
+  border: 1px solid hsla(30, 50%, 50%, 0.2);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, hsla(30, 100%, 70%, 0.1), transparent);
+  transition: left 0.5s;
+}
+
+.card:hover::before {
+  left: 100%;
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-deep), var(--glow-warm);
+  border-color: hsla(30, 70%, 60%, 0.4);
+}
+
+/* Enhanced Link Styles */
+a {
+  color: var(--accent);
+  text-decoration: none;
+  transition: color 0.3s ease;
+}
+
+a:hover {
+  color: var(--accent-dark);
+}
+
+/* Custom Utilities */
+.text-ember {
+  color: var(--ember-glow);
+}
+
+.text-fire {
+  color: var(--fire-core);
+}
+
+.bg-ember-glow {
+  background: radial-gradient(circle, var(--ember-glow) 0%, transparent 70%);
+}
+
+.shadow-ember {
+  box-shadow: var(--shadow-ember);
+}
+
+.glow-warm {
+  box-shadow: var(--glow-warm);
+}
+
+.glow-intense {
+  box-shadow: var(--glow-intense);
+}
+
+/* Atmospheric Background Effects */
+.atmospheric-bg {
+  position: relative;
+}
+
+.atmospheric-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: 
+    radial-gradient(circle at 20% 30%, hsla(25, 100%, 50%, 0.1) 0%, transparent 50%),
+    radial-gradient(circle at 80% 70%, hsla(15, 100%, 45%, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 50% 50%, hsla(35, 90%, 55%, 0.05) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Enhanced Animations */
+@keyframes ember-float {
+  0% { 
+    transform: translateY(100vh) translateX(0px) rotate(0deg) scale(0.5);
+    opacity: 0;
+  }
+  10% { 
+    opacity: 0.8;
+    transform: translateY(90vh) translateX(5px) rotate(45deg) scale(0.7);
+  }
+  50% { 
+    opacity: 1;
+    transform: translateY(50vh) translateX(15px) rotate(180deg) scale(1);
+  }
+  90% { 
+    opacity: 0.6;
+    transform: translateY(10vh) translateX(25px) rotate(315deg) scale(0.8);
+  }
+  100% { 
+    transform: translateY(-10px) translateX(35px) rotate(360deg) scale(0.3);
+    opacity: 0;
+  }
+}
+
+@keyframes campfire-pulse {
+  0%, 100% { 
+    box-shadow: 
+      0 0 20px hsla(25, 100%, 50%, 0.3),
+      0 0 40px hsla(25, 100%, 50%, 0.1),
+      inset 0 0 20px hsla(25, 100%, 50%, 0.1);
+  }
+  50% { 
+    box-shadow: 
+      0 0 40px hsla(25, 100%, 50%, 0.6),
+      0 0 80px hsla(25, 100%, 50%, 0.3),
+      inset 0 0 30px hsla(25, 100%, 50%, 0.2);
+  }
+}
+
+@keyframes mystical-glow {
+  0%, 100% {
+    filter: drop-shadow(0 0 5px hsla(25, 100%, 65%, 0.5));
+  }
+  50% {
+    filter: drop-shadow(0 0 15px hsla(25, 100%, 65%, 0.8));
+  }
+}
+
+.animate-ember-float {
+  animation: ember-float linear infinite;
+}
+
+.animate-campfire-pulse {
+  animation: campfire-pulse 2s ease-in-out infinite;
+}
+
+.animate-mystical-glow {
+  animation: mystical-glow 3s ease-in-out infinite;
+}
+
+/* Responsive Design Enhancements */
+@media (max-width: 768px) {
+  body {
+    font-size: 14px;
+  }
+  
+  .card-body {
+    padding: 1rem;
+  }
+  
+  h1 {
+    font-size: clamp(1.5rem, 8vw, 2.5rem);
+  }
+}
+
+/* Performance Optimizations */
+.transform-gpu {
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+.backdrop-blur-custom {
+  backdrop-filter: blur(12px) saturate(1.5);
+  -webkit-backdrop-filter: blur(12px) saturate(1.5);
+}
+
+/* Accessibility Enhancements */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/* Focus Styles */
+*:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Print Styles */
+@media print {
+  body {
+    background: white;
+    color: black;
+  }
+  
+  .floating-embers,
+  .atmospheric-bg::before {
+    display: none;
+  }
 }

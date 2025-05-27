@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { useSupabaseClient } from '@supabase/auth-helpers-react';
+import { useSupabaseClient, useUser } from '@supabase/auth-helpers-react';
 import ArticleBrowser from '@/components/ArticleBrowser.client';
 import Logs from '@/components/Logs.client';
 import type { Post } from '@/lib/types';
@@ -11,6 +11,9 @@ export default function CombinedPage() {
   const params = useParams();
   const gameId = parseInt(params?.id as string, 10);
   const supabase = useSupabaseClient();
+  const user = useUser();
+  console.log('Angemeldeter Benutzer:', user?.id);
+
 
   const [articles, setArticles] = useState<Post[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -19,24 +22,23 @@ export default function CombinedPage() {
   useEffect(() => {
     if (!gameId || isNaN(gameId)) return;
 
-    console.log('Lade Artikel für Spiel mit ID:', gameId);
-
     (async () => {
-      setIsLoading(true);
-      const { data, error } = await supabase
-        .from('posts')
+      const { data, error } = await supabase.rpc('debug_logs_fn');
+      console.log('Debug-Daten aus Funktion:', data);
+      const { data: debugData, error: debugError } = await supabase
+      
+        .from('debug_logs_view')
         .select('*')
         .eq('game_id', gameId);
 
-      if (error) {
-        console.error('Fehler beim Laden der Artikel:', error);
+      if (debugError) {
+        console.error('Fehler beim Laden der Debug-Daten:', debugError);
       } else {
-        console.log('Geladene Artikel:', data?.length);
-        setArticles(data || []);
+        console.log('Debug-Daten aus View:', debugData);
       }
-      setIsLoading(false);
     })();
   }, [gameId, supabase]);
+
 
   const handleDeleteArticle = async (id: number) => {
     const { error } = await supabase.from('posts').delete().eq('id', id);
@@ -102,20 +104,34 @@ export default function CombinedPage() {
       <div className="px-6 relative">
         <div className="relative overflow-hidden">
           {/* Logs Tab */}
-          <div
-            className={`w-full bg-base-100 p-6 rounded-lg shadow-md transition-all duration-700 ease-in-out transform ${
+            <div
+              className={`w-full bg-base-100 p-6 rounded-lg shadow-md transition-all duration-700 ease-in-out transform ${
               activeTab === 'logs'
                 ? 'opacity-100 translate-x-0 scale-100'
                 : 'opacity-0 translate-x-8 scale-95 pointer-events-none absolute top-0 left-0'
-            }`}
-          >
-            <h2 className="text-2xl font-bold mb-4 bg-gradient-to-r from-accent to-info bg-clip-text text-transparent">
-              Logs
-            </h2>
-            <div className="overflow-x-auto">
-              <Logs gameId={gameId.toString()} />
+              }`}
+            >
+              {/* Titel zentriert */}
+              <div className="w-full flex justify-center mb-4">
+              <h2 className="text-2xl font-bold bg-gradient-to-r from-accent to-info bg-clip-text text-transparent text-center">
+                Logs
+              </h2>
+              </div>
+              <div className="flex flex-col lg:flex-row gap-4">
+              {/* Linker Bereich (z. B. Info oder frei lassen) */}
+              <div className="lg:w-1/2">
+                <p className="text-gray-400">Platzhalter für Inhalte auf der linken Seite</p>
+              </div>
+              {/* Dunkelgrauer Trenner */}
+              <div className="hidden lg:flex items-stretch">
+                <div className="w-px bg-gray-700 mx-4" />
+              </div>
+              {/* Rechter Bereich – Logs */}
+              <div className="lg:w-1/2">
+                <Logs gameId={gameId.toString()} />
+              </div>
+              </div>
             </div>
-          </div>
 
           {/* Artikel Tab */}
           <div
