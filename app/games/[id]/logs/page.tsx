@@ -23,19 +23,18 @@ export default function CombinedPage() {
     if (!gameId || isNaN(gameId)) return;
 
     (async () => {
-      const { data, error } = await supabase.rpc('debug_logs_fn');
-      console.log('Debug-Daten aus Funktion:', data);
-      const { data: debugData, error: debugError } = await supabase
-      
-        .from('debug_logs_view')
+      setIsLoading(true);
+      const { data, error } = await supabase
+        .from('posts')
         .select('*')
         .eq('game_id', gameId);
 
-      if (debugError) {
-        console.error('Fehler beim Laden der Debug-Daten:', debugError);
+      if (error) {
+        console.error('Fehler beim Laden der Artikel:', error);
       } else {
-        console.log('Debug-Daten aus View:', debugData);
+        setArticles(data || []);
       }
+      setIsLoading(false);
     })();
   }, [gameId, supabase]);
 

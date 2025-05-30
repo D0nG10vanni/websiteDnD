@@ -277,9 +277,7 @@ export default function ArticleBrowser({
               {selected.title}
               <span className="text-amber-500 ml-3">❖</span>
             </h2>
-            <article className="prose prose-invert prose-xl leading-relaxed max-w-none
-                                prose-headings:text-amber-300 prose-p:text-amber-100 prose-a:text-amber-400
-                                hover:prose-a:text-amber-300 prose-strong:text-amber-200 prose-em:text-amber-200">
+            <article className="prose prose-mystical max-w-none">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
                 {content}
               </ReactMarkdown>
