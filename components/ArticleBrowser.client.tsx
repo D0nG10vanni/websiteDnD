@@ -1,8 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import MarkdownRenderer from '@/components/MarkdownRenderer'
 import { supabase } from '@/lib/supabaseClient'
 import type { Post, Folder } from '@/lib/types'
 import Link from 'next/link'
@@ -53,7 +52,7 @@ export default function ArticleBrowser({
 
   const filtered = useMemo(
     () =>
-      articles.filter((a) =>
+      (articles ?? []).filter((a) =>
         [a.title, a.content]
           .join(' ')
           .toLowerCase()
@@ -118,6 +117,7 @@ export default function ArticleBrowser({
   }, [filtered])
 
   const uncategorized = filtered.filter((a) => !a.folder_id)
+  console.log('articles', articles)
 
   const renderFolder = (f: Folder & { children: Folder[] }) => {
     const items = articlesByFolder[f.id] || []
@@ -220,7 +220,7 @@ export default function ArticleBrowser({
               </div>
             )}
 
-            {articles.length === 0 && (
+            {Array.isArray(articles) && articles.length === 0 && (
               <div className="text-center py-8 text-amber-200/50 italic font-serif">
                 Noch keine Schriften in diesem Archiv vorhanden.
               </div>
@@ -233,7 +233,7 @@ export default function ArticleBrowser({
             href={`/games/${gameId}/ArticleView/NeuerArtikel`}
             className="inline-block px-4 py-2 border border-amber-900/40 rounded-sm font-serif text-xs text-amber-200/80 bg-amber-900/10 hover:bg-amber-900/30"
           >
-            Neuen Artikel erstellen
+            Neuen Artikel hochladen
           </Link>
           <Link
             href={`/games/${gameId}/ArticleView/Ordnerstruktur`}
@@ -277,11 +277,14 @@ export default function ArticleBrowser({
               {selected.title}
               <span className="text-amber-500 ml-3">❖</span>
             </h2>
-            <article className="prose prose-mystical max-w-none">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {content}
-              </ReactMarkdown>
-            </article>
+            <MarkdownRenderer
+              content={content}
+              onLinkClick={(title) => {
+                const match = articles.find((a) => a.title === title)
+                if (match) setSelected(match)
+                else alert(`Kein Artikel mit dem Titel „${title}“ gefunden.`)
+              }}
+            />
             <div className="text-center text-xs text-amber-200/40 font-serif italic mt-4">
               Aus dem Kodex, Folio {selected.id}
             </div>

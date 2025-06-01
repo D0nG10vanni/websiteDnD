@@ -18,7 +18,7 @@ type UploadItem = {
   name: string;
 };
 
-export default function MysticalArticleUpload({ gameId = 1 }: { gameId?: number }) {
+export default function MysticalArticleUpload({ gameid = 1 }: { gameid?: number }) {
   const [folders, setFolders] = useState<Folder[]>([]);
   const [items, setItems] = useState<UploadItem[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -29,7 +29,7 @@ export default function MysticalArticleUpload({ gameId = 1 }: { gameId?: number 
 
   useEffect(() => {
     fetchUserAndFolders();
-  }, [gameId]);
+  }, [gameid]);
 
   async function fetchUserAndFolders() {
     setIsLoading(true);
@@ -52,7 +52,7 @@ export default function MysticalArticleUpload({ gameId = 1 }: { gameId?: number 
       const { data, error } = await supabase
         .from('folders')
         .select('*')
-        .eq('game_id', gameId)
+        .eq('game_id', gameid)
         .order('name');
         
       if (error) {
@@ -141,7 +141,7 @@ export default function MysticalArticleUpload({ gameId = 1 }: { gameId?: number 
           title: item.name,
           content: text,
           creator: userUuid,
-          game_Id: gameId,
+          game_id: gameid,
           folder_id: item.folderId,
           kategorie: folderName,
           created_at: new Date().toISOString(),
@@ -293,7 +293,7 @@ export default function MysticalArticleUpload({ gameId = 1 }: { gameId?: number 
               Bringe deine <span className="text-orange-300 font-semibold">mystischen Schriften</span> in die digitale Bibliothek
               <br />
               <span className="text-orange-200/80 text-lg block mt-2">
-                ✧ Für Sammler des Wissens und Hüter der Geschichten ✧
+                ✧ Aktuell ist es nur möglich, Dateien hochzuladen, erstellt werden müssen sie weiterhin in Obsidian ✧
               </span>
             </p>
           </div>
@@ -331,7 +331,7 @@ export default function MysticalArticleUpload({ gameId = 1 }: { gameId?: number 
                       Verfügbare Ordner
                     </h2>
                     <a 
-                      href="/folder-manager" 
+                      href={`/games/${gameid}/ArticleView/Ordnerstruktur`} 
                       className="p-2 text-orange-400 hover:text-orange-300 transition-all duration-300 hover:scale-110 transform-gpu"
                       title="Ordner verwalten"
                     >
@@ -349,7 +349,7 @@ export default function MysticalArticleUpload({ gameId = 1 }: { gameId?: number 
                         </div>
                         <p className="text-orange-200 font-serif text-lg mb-4">Noch keine Ordner vorhanden</p>
                         <a 
-                          href="/folder-manager" 
+                          href={`/games/${gameid}/ArticleView/Ordnerstruktur`} 
                           className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-orange-600 to-red-600 text-orange-100 rounded-lg hover:from-orange-500 hover:to-red-500 transition-all duration-300 font-serif shadow-lg hover:shadow-xl hover:shadow-orange-500/30 transform-gpu hover:scale-105"
                         >
                           <FolderPlus className="w-5 h-5 mr-2" />
@@ -375,7 +375,7 @@ export default function MysticalArticleUpload({ gameId = 1 }: { gameId?: number 
                   {folders.length > 0 && (
                     <div className="mt-6 pt-6 border-t border-orange-500/30">
                       <a 
-                        href="/folder-manager" 
+                        href={`/games/${gameid}/ArticleView/Ordnerstruktur`} 
                         className="w-full flex items-center justify-center px-4 py-3 bg-gradient-to-r from-orange-600 to-red-600 text-orange-100 rounded-lg hover:from-orange-500 hover:to-red-500 transition-all duration-300 font-serif shadow-lg hover:shadow-xl hover:shadow-orange-500/30 transform-gpu hover:scale-105"
                       >
                         <Settings className="w-5 h-5 mr-2" />
@@ -623,6 +623,4 @@ export default function MysticalArticleUpload({ gameId = 1 }: { gameId?: number 
       `}</style>
     </>
   );
-}
-// Floating embers and atmospheric effects
-// are implemented using CSS animations and React state management.      
+}     
