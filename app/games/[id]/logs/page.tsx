@@ -6,6 +6,7 @@ import { useSupabaseClient, useUser } from '@supabase/auth-helpers-react';
 import ArticleBrowser from '@/components/ArticleBrowser.client';
 import Logs from '@/components/Logs.client';
 import MarkdownRenderer from '@/components/MarkdownRenderer';
+import GraphView from '@/components/graphview';
 import type { Post } from '@/lib/types';
 
 export default function CombinedPage() {
@@ -16,8 +17,9 @@ export default function CombinedPage() {
   console.log('Angemeldeter Benutzer:', user?.id);
 
   const [articles, setArticles] = useState<Post[]>([]);
+  const [folders, setFolders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'articles' | 'logs'>('logs');
+  const [activeTab, setActiveTab] = useState<'articles' | 'logs' | 'graph'>('logs');
   const [selectedArticleFromLogs, setSelectedArticleFromLogs] = useState<Post | null>(null);
   const [selectedArticleContent, setSelectedArticleContent] = useState<string | null>(null);
   const [isLoadingArticleContent, setIsLoadingArticleContent] = useState(false);
@@ -27,16 +29,31 @@ export default function CombinedPage() {
 
     (async () => {
       setIsLoading(true);
-      const { data, error } = await supabase
+      
+      // Load articles
+      const { data: articlesData, error: articlesError } = await supabase
         .from('posts')
         .select('*')
         .eq('game_id', gameId);
 
-      if (error) {
-        console.error('Fehler beim Laden der Artikel:', error);
+      if (articlesError) {
+        console.error('Fehler beim Laden der Artikel:', articlesError);
       } else {
-        setArticles(data || []);
+        setArticles(articlesData || []);
       }
+
+      // Load folders
+      const { data: foldersData, error: foldersError } = await supabase
+        .from('folders')
+        .select('*')
+        .eq('game_id', gameId);
+
+      if (foldersError) {
+        console.error('Fehler beim Laden der Ordner:', foldersError);
+      } else {
+        setFolders(foldersData || []);
+      }
+
       setIsLoading(false);
     })();
   }, [gameId, supabase]);
@@ -102,6 +119,12 @@ export default function CombinedPage() {
     }
   };
 
+  const handleGraphNodeClick = (article: Post) => {
+    // Switch to articles tab and show the selected article
+    setActiveTab('articles');
+    // You can add additional logic here to select the article in ArticleBrowser
+  };
+
   if (isNaN(gameId)) {
     return (
       <div className="min-h-screen bg-base-200 p-6 flex items-center justify-center" data-theme="fantasy">
@@ -137,17 +160,28 @@ export default function CombinedPage() {
         >
           Artikel
         </button>
+        <button
+          className={`transition-all duration-300 hover:scale-110 ${
+            activeTab === 'graph'
+              ? 'underline text-secondary font-bold transform scale-105'
+              : 'text-gray-400 hover:text-gray-600'
+          }`}
+          onClick={() => setActiveTab('graph')}
+        >
+          Graphenansicht
+        </button>
       </div>
 
       {/* Content Area */}
       <div className="px-6 relative">
         <div className="relative overflow-hidden">
+          
           {/* Logs Tab */}
           <div
             className={`w-full bg-base-100 p-6 rounded-lg shadow-md transition-all duration-700 ease-in-out transform ${
-            activeTab === 'logs'
-              ? 'opacity-100 translate-x-0 scale-100'
-              : 'opacity-0 translate-x-8 scale-95 pointer-events-none absolute top-0 left-0'
+              activeTab === 'logs'
+                ? 'opacity-100 translate-x-0 scale-100'
+                : 'opacity-0 translate-x-8 scale-95 pointer-events-none absolute top-0 left-0'
             }`}
           >
             {/* Titel zentriert */}
@@ -245,6 +279,40 @@ export default function CombinedPage() {
               />
             </div>
           </div>
+
+          {/* Graph Tab */}
+          <div
+            className={`w-full bg-base-100 p-6 rounded-lg shadow-md transition-all duration-700 ease-in-out transform ${
+              activeTab === 'graph'
+                ? 'opacity-100 translate-x-0 scale-100'
+                : 'opacity-0 translate-x-8 scale-95 pointer-events-none absolute top-0 left-0'
+            }`}
+          >
+            <div className="w-full">
+              <div className="text-center mb-6">
+                <h2 className="text-2xl font-bold bg-gradient-to-r from-secondary to-info bg-clip-text text-transparent">
+                  Graphenansicht der Artikel
+                </h2>
+              </div>
+              
+              {isLoading ? (
+                <div className="text-center py-12 text-amber-200/50 italic font-serif">
+                  Die Verbindungen zwischen den Artikeln werden erkundet…
+                </div>
+              ) : (
+                <div className="w-full flex justify-center">
+                  <GraphView 
+                    articles={articles}
+                    folders={folders}
+                    onNodeClick={handleGraphNodeClick}
+                    width={Math.min(1200, window.innerWidth - 100)}
+                    height={700}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
         </div>
       </div>
 
