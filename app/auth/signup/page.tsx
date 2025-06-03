@@ -27,6 +27,14 @@ export default function SignUpPage() {
       }
     })
 
+    if (data?.user) {
+      await supabase.from('"Users"').upsert({
+        user_id: data.user.id,
+        email: data.user.email,
+        username
+      })
+    }
+
     setLoading(false)
 
     if (error) {
