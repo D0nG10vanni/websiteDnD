@@ -7,6 +7,7 @@ import ArticleBrowser from '@/components/ArticleBrowser.client';
 import Logs from '@/components/Logs.client';
 import MarkdownRenderer from '@/components/MarkdownRenderer';
 import GraphView from '@/components/graphview';
+import Timeline from '@/components/Timeline'; // Importiere die Timeline-Komponente
 import type { Post } from '@/lib/types';
 
 export default function CombinedPage() {
@@ -19,7 +20,7 @@ export default function CombinedPage() {
   const [articles, setArticles] = useState<Post[]>([]);
   const [folders, setFolders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'articles' | 'logs' | 'graph'>('logs');
+  const [activeTab, setActiveTab] = useState<'articles' | 'logs' | 'graph' | 'timeline'>('logs');
   const [selectedArticleFromLogs, setSelectedArticleFromLogs] = useState<Post | null>(null);
   const [selectedArticleContent, setSelectedArticleContent] = useState<string | null>(null);
   const [isLoadingArticleContent, setIsLoadingArticleContent] = useState(false);
@@ -120,7 +121,6 @@ export default function CombinedPage() {
   };
 
   const handleGraphNodeClick = (article: Post) => {
-    // Switch to articles tab and show the selected article
     setActiveTab('articles');
     // You can add additional logic here to select the article in ArticleBrowser
   };
@@ -169,6 +169,16 @@ export default function CombinedPage() {
           onClick={() => setActiveTab('graph')}
         >
           Graphenansicht
+        </button>
+        <button
+          className={`transition-all duration-300 hover:scale-110 ${
+            activeTab === 'timeline'
+              ? 'underline text-info font-bold transform scale-105'
+              : 'text-gray-400 hover:text-gray-600'
+          }`}
+          onClick={() => setActiveTab('timeline')}
+        >
+          Timeline
         </button>
       </div>
 
@@ -250,7 +260,7 @@ export default function CombinedPage() {
                 <div className="w-px bg-gray-700 mx-4" />
               </div>
               
-              {/* Rechter Bereich – Logs */}
+              {/*Logs */}
               <div className="lg:w-1/2">
                 <Logs 
                   gameId={gameId.toString()} 
@@ -305,11 +315,29 @@ export default function CombinedPage() {
                     articles={articles}
                     folders={folders}
                     onNodeClick={handleGraphNodeClick}
-                    width={Math.min(1200, window.innerWidth - 100)}
+                    width={typeof window !== 'undefined' ? Math.min(1200, window.innerWidth - 100) : 1000}
                     height={700}
                   />
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Timeline Tab */}
+          <div
+            className={`w-full bg-base-100 p-6 rounded-lg shadow-md transition-all duration-700 ease-in-out transform ${
+              activeTab === 'timeline'
+                ? 'opacity-100 translate-x-0 scale-100'
+                : 'opacity-0 translate-x-8 scale-95 pointer-events-none absolute top-0 left-0'
+            }`}
+          >
+            <div className="w-full">
+              <div className="text-center mb-6">
+                <h2 className="text-2xl font-bold bg-gradient-to-r from-info to-accent bg-clip-text text-transparent">
+                  Timeline
+                </h2>
+              </div>
+              <Timeline articles={articles} />
             </div>
           </div>
 

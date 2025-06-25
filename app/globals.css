@@ -122,9 +122,345 @@ h6 {
   letter-spacing: 0.05em;
 }
 
+/* CSS Styling */
+.author-info {
+  /* Basis-Styling */
+  display: inline-block;
+  font-style: italic;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  
+  /* Elegante Farbgebung */
+  color: #9ca3af; /* text-gray-400 */
+  
+  /* Subtile Abgrenzung */
+  background: linear-gradient(135deg, rgba(156, 163, 175, 0.08) 0%, rgba(156, 163, 175, 0.04) 100%);
+  border-left: 2px solid rgba(156, 163, 175, 0.3);
+  
+  /* Spacing & Form */
+  padding: 0.25rem 0.5rem 0.25rem 0.75rem;
+  margin: 0 0.25rem;
+  border-radius: 0 6px 6px 0;
+  
+  /* Typografie-Verfeinerung */
+  font-family: serif;
+  letter-spacing: 0.025em;
+  
+  /* Subtile Schatten */
+  box-shadow: 
+    0 1px 2px rgba(0, 0, 0, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  
+  /* Smooth Transitions */
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  
+  /* Hover-Effekt Setup */
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Kreative Hover-Effekte */
+.author-info:hover {
+  color: #374151; /* text-gray-700 */
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(147, 51, 234, 0.08) 100%);
+  border-left-color: #3b82f6;
+  transform: translateY(-1px) scale(1.02);
+  
+  /* Neon Glow Effekt */
+  box-shadow: 
+    0 0 0 1px rgba(59, 130, 246, 0.3),
+    0 0 8px rgba(59, 130, 246, 0.4),
+    0 0 16px rgba(59, 130, 246, 0.2),
+    0 4px 12px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  
+  /* Shimmer Animation */
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+/* Shimmer Keyframes */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  50% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Zusätzlicher Glowing Border Effekt */
+.author-info::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -2px;
+  width: 2px;
+  height: 100%;
+  background: linear-gradient(45deg, transparent, #3b82f6, transparent);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.author-info:hover::before {
+  opacity: 1;
+  animation: borderGlow 2s ease-in-out infinite;
+}
+
+@keyframes borderGlow {
+  0%, 100% { 
+    background: linear-gradient(45deg, transparent, #3b82f6, transparent);
+    filter: hue-rotate(0deg);
+  }
+  50% { 
+    background: linear-gradient(45deg, transparent, #8b5cf6, transparent);
+    filter: hue-rotate(90deg);
+  }
+}
+
+/* Dark Mode Anpassungen */
+@media (prefers-color-scheme: dark) {
+  .author-info {
+    color: #6b7280;
+    background: linear-gradient(135deg, rgba(107, 114, 128, 0.12) 0%, rgba(107, 114, 128, 0.06) 100%);
+    border-left-color: rgba(107, 114, 128, 0.4);
+    box-shadow: 
+      0 1px 2px rgba(0, 0, 0, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+  
+  .author-info:hover {
+    color: #d1d5db; /* text-gray-300 */
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.25) 0%, rgba(168, 85, 247, 0.15) 100%);
+    border-left-color: #6366f1;
+    
+    /* Verstärkter Neon-Effekt im Dark Mode */
+    box-shadow: 
+      0 0 0 1px rgba(99, 102, 241, 0.5),
+      0 0 12px rgba(99, 102, 241, 0.6),
+      0 0 24px rgba(99, 102, 241, 0.3),
+      0 0 36px rgba(99, 102, 241, 0.1),
+      0 6px 20px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
+  
+  .author-info:hover::before {
+    background: linear-gradient(45deg, transparent, #6366f1, transparent);
+  }
+  
+  @keyframes borderGlow {
+    0%, 100% { 
+      background: linear-gradient(45deg, transparent, #6366f1, transparent);
+    }
+    50% { 
+      background: linear-gradient(45deg, transparent, #a855f7, transparent);
+    }
+  }
+}
+
+/* Alternative: Mystisches Fantasy-Theme mit magischem Effekt */
+.author-info.mystical {
+  color: #d97706;
+  background: linear-gradient(135deg, rgba(217, 119, 6, 0.08) 0%, rgba(217, 119, 6, 0.03) 100%);
+  border-left: 2px solid rgba(217, 119, 6, 0.3);
+  font-family: serif;
+  text-shadow: 0 0 2px rgba(217, 119, 6, 0.2);
+}
+
+.author-info.mystical:hover {
+  color: #f59e0b;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.2) 0%, rgba(217, 119, 6, 0.1) 100%);
+  border-left-color: #f59e0b;
+  
+  /* Magisches goldenes Leuchten */
+  box-shadow: 
+    0 0 0 1px rgba(245, 158, 11, 0.4),
+    0 0 8px rgba(245, 158, 11, 0.6),
+    0 0 16px rgba(245, 158, 11, 0.4),
+    0 0 24px rgba(245, 158, 11, 0.2),
+    0 4px 12px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  
+  text-shadow: 
+    0 0 4px rgba(245, 158, 11, 0.8),
+    0 0 8px rgba(245, 158, 11, 0.4);
+    
+  animation: magicPulse 2s ease-in-out infinite;
+}
+
+@keyframes magicPulse {
+  0%, 100% { 
+    filter: brightness(1) saturate(1);
+    transform: translateY(-1px) scale(1.02);
+  }
+  50% { 
+    filter: brightness(1.2) saturate(1.3);
+    transform: translateY(-2px) scale(1.05);
+  }
+}
+
+/* Alternative: Cyberpunk Neon Style */
+.author-info.cyberpunk {
+  color: #06b6d4;
+  background: linear-gradient(135deg, rgba(6, 182, 212, 0.1) 0%, rgba(6, 182, 212, 0.05) 100%);
+  border-left: 2px solid rgba(6, 182, 212, 0.4);
+  font-family: 'Courier New', monospace;
+  letter-spacing: 0.05em;
+}
+
+.author-info.cyberpunk:hover {
+  color: #67e8f9;
+  background: linear-gradient(135deg, rgba(103, 232, 249, 0.2) 0%, rgba(6, 182, 212, 0.1) 100%);
+  border-left-color: #67e8f9;
+  
+  /* Cyberpunk Neon Glow */
+  box-shadow: 
+    0 0 0 1px rgba(103, 232, 249, 0.6),
+    0 0 10px rgba(103, 232, 249, 0.8),
+    0 0 20px rgba(103, 232, 249, 0.5),
+    0 0 30px rgba(103, 232, 249, 0.3),
+    0 0 40px rgba(6, 182, 212, 0.2),
+    inset 0 0 10px rgba(103, 232, 249, 0.1);
+  
+  text-shadow: 
+    0 0 5px rgba(103, 232, 249, 1),
+    0 0 10px rgba(103, 232, 249, 0.7),
+    0 0 15px rgba(103, 232, 249, 0.5);
+    
+  animation: cyberpunkFlicker 0.1s ease-in-out infinite alternate;
+}
+
+@keyframes cyberpunkFlicker {
+  0% { opacity: 1; }
+  100% { opacity: 0.98; }
+}
+
+/* Typewriter Effekt für Interactive Mode */
+.author-info.typewriter:hover {
+  overflow: hidden;
+  white-space: nowrap;
+  animation: typewriter 1s steps(20) forwards;
+}
+
+@keyframes typewriter {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
+/* Responsive Anpassungen */
+@media (max-width: 640px) {
+  .author-info {
+    font-size: 0.8rem;
+    padding: 0.1875rem 0.375rem 0.1875rem 0.5rem;
+    margin: 0 0.125rem;
+  }
+}
+
+/* Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+  .author-info,
+  .author-info:hover,
+  .author-info::before {
+    animation: none;
+    transition: none;
+  }
+}
+
+
 p {
   margin-bottom: 1rem;
   color: var(--foreground-muted);
+}
+
+/* === CSS für Timeline-Dates === */
+.timeline-date {
+  display: inline-block;
+  font-family: 'Courier New', monospace;
+  font-size: 0.75rem;
+  font-weight: 600;
+
+  /* Schickes Design */
+  background: linear-gradient(135deg, #1f2937 0%, #374151 100%);
+  color: #f59e0b;
+  border: 1px solid #d97706;
+  border-radius: 8px;
+
+  /* Spacing */
+  padding: 0.25rem 0.5rem;
+  margin: 0 0.25rem;
+
+  /* Icon-artiger Look */
+  position: relative;
+
+  /* Schatten für Tiefe */
+  box-shadow: 
+    0 2px 4px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+
+  /* Transition */
+  transition: all 0.2s ease;
+  cursor: default;
+
+  /* Allow content to grow */
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  word-break: break-word;
+}
+
+/* Icon vor dem Datum */
+.timeline-date::before {
+  content: '📅';
+  margin-right: 0.25rem;
+  font-size: 0.7rem;
+}
+
+@keyframes glitch {
+  0% { transform: translate(0); }
+  20% { transform: translate(-2px, 2px); }
+  40% { transform: translate(-2px, -2px); }
+  60% { transform: translate(2px, 2px); }
+  80% { transform: translate(2px, -2px); }
+  100% { transform: translate(0); }
+}
+
+.glitch {
+  position: relative;
+  color: white;
+  animation: glitch 1s infinite;
+}
+
+.glitch::before,
+.glitch::after {
+  content: attr(data-text);
+  position: absolute;
+  left: 0;
+  width: 100%;
+  overflow: hidden;
+  color: #f0f;
+  clip: rect(0, 900px, 0, 0);
+}
+
+.glitch::before {
+  animation: glitch 2s infinite linear alternate-reverse;
+  top: -2px;
+}
+
+.glitch::after {
+  animation: glitch 1.5s infinite linear alternate;
+  color: #0ff;
+  top: 2px;
+}
+
+
+/* Hover-Effekt */
+.timeline-date:hover {
+  background: linear-gradient(135deg, #374151 0%, #4b5563 100%);
+  border-color: #f59e0b;
+  color: #fbbf24;
+  transform: translateY(-1px);
+  box-shadow: 
+    0 4px 8px rgba(0, 0, 0, 0.15),
+    0 0 0 1px rgba(245, 158, 11, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
 /* Custom Scrollbar */

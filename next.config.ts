@@ -8,7 +8,7 @@ const nextConfig = {
 
   // Konfigurieren der API-Routen für experimentelle Funktionen
   experimental: {
-    serverComponentsExternalPackages: ['fs'],
+    serverExternalPackages: ['fs'],
   },
   // Stellen Sie sicher, dass Server-Komponenten richtig funktionieren
   reactStrictMode: false,

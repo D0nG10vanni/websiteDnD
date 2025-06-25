@@ -102,7 +102,7 @@ export default function Home() {
                   Sammle dich am <span className="text-orange-300 font-semibold">digitalen Lagerfeuer</span> und erschaffe epische Geschichten.
                   <br />
                   <span className="text-orange-200/80 italic text-lg block mt-2">
-                  Für Meister der Geschichten und Weber der Welten
+                  I'm going on an adventure! ~ Bilbo Baggins
                   </span>
                 </p>
                 
@@ -112,8 +112,8 @@ export default function Home() {
                     <button className="btn btn-primary btn-lg w-full font-serif text-lg border-2 border-orange-500/60 hover:border-orange-400 hover:shadow-xl hover:shadow-orange-500/30 transition-all duration-300 group relative overflow-hidden">
                       <span className="absolute inset-0 bg-gradient-to-r from-orange-500/20 to-red-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
                       <span className="relative flex items-center justify-center">
-                        <span className="text-orange-300 mr-3 text-xl">🔥</span>
-                        Neue Kampagne starten
+                        <span className="text-orange-300 mr-3 text-xl">⚔️</span>
+                        Zu den Kampagnen
                         <span className="text-orange-300 ml-3 text-xl">⚔️</span>
                       </span>
                     </button>

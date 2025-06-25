@@ -212,5 +212,17 @@ function preprocessMarkdown(md: string): string {
   return md
     .replace(/==([^=]+)==/g, '<mark class="bg-yellow-200 dark:bg-yellow-800 px-1 rounded">$1</mark>')
     .replace(/~~([^~]+)~~/g, '<del>$1</del>')
+    .replace(/°([^°]+)°/g, '<span class="author-info">$1</span>')
     .replace(/^>\s*\[!([^\]]+)\](.*)$/gm, '> [!$1]$2')
+    .replace(/§([^§]+)§/g, (match, content) => {
+      // Prüfen ob Zeitspanne (enthält "-")
+      if (content.includes('-')) {
+        const parts = content.split('-');
+        if (parts.length === 2) {
+          return `<span class="timeline-date range">Zeitspanne: Von ${parts[0].trim()} bis ${parts[1].trim()}</span>`;
+        }
+      }
+      // Einzeldatum
+      return `<span class="timeline-date single">Datum: ${content}</span>`;
+    })
 }
