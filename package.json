@@ -59,8 +59,13 @@
     "@types/d3-force": "^3.0.10",
     "@types/gsap": "^1.20.2",
     "@types/node": "^20",
+<<<<<<< HEAD
     "@types/react": "^19",
     "@types/react-dom": "^19",
+=======
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+>>>>>>> 7f20791 (erster commit vom macbook)
     "@types/three": "^0.177.0",
     "@types/webpack": "^5.28.5",
     "autoprefixer": "^10.4.21",

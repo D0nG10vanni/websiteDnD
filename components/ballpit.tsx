@@ -574,7 +574,8 @@ class Y extends MeshPhysicalMaterial {
 }
 
 const XConfig = {
-  count: 500,
+
+  count: 300,
   colors: [0, 0, 0],
   ambientColor: 0xffffff,
   ambientIntensity: 1,
@@ -585,17 +586,18 @@ const XConfig = {
     clearcoat: 1,
     clearcoatRoughness: 0.15,
   },
-  minSize: 0.2,
-  maxSize: 0.5,
+
+  minSize: 0.3,
+  maxSize: 0.7,
   size0: 0.4,
-  gravity: 0.1, 
-  friction: 0.99, 
-  wallBounce: 0.8, 
-  maxVelocity: 0.25, 
+  gravity: 0.7, 
+  friction: 0.8, 
+  wallBounce: 0.95, 
+  maxVelocity: 0.05, 
   maxX: 10,
   maxY: 10,
   maxZ: 2,
-  controlSphere0: false,
+  controlSphere0: true,
   followCursor: true,
 };
 
