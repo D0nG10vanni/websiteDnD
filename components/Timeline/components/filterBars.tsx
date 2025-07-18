@@ -46,8 +46,8 @@ export const TypeFilterBar: React.FC<TypeFilterBarProps> = ({
     { key: 'period', label: 'Perioden', color: 'blue' },
     { key: 'event', label: 'Events', color: 'green' }
   ]
-
   return (
+
     <div className="flex flex-wrap gap-2">
       {types.map(type => (
         <button

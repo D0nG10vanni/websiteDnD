@@ -18,30 +18,54 @@ export default function SignUpPage() {
     setErrorMsg(null)
     setLoading(true)
 
-    // Supabase Auth SignUp
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { username }    // wird in auth.users.user_metadata gespeichert
-      }
-    })
-
-    if (data?.user) {
-      await supabase.from('"Users"').upsert({
-        user_id: data.user.id,
-        email: data.user.email,
-        username
+    try {
+      // Supabase Auth SignUp
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { username }    // wird in auth.users.user_metadata gespeichert
+        }
       })
-    }
 
-    setLoading(false)
+      if (error) {
+        throw error
+      }
 
-    if (error) {
-      setErrorMsg(error.message)
-    } else {
-      // Du kannst hier auch einen Redirect zu einem "Check your email"-Screen machen
+      // Nur wenn User erfolgreich erstellt wurde
+      if (data?.user) {
+        // Explizit den Username in die Users Tabelle einfügen
+        const { error: insertError } = await supabase
+          .from('Users')  // Ohne Anführungszeichen probieren
+          .upsert({
+            user_id: data.user.id,
+            email: data.user.email,
+            username: username,  // Explizit den lokalen username verwenden
+            created_at: new Date().toISOString()
+          }, {
+            onConflict: 'user_id'
+          })
+
+        if (insertError) {
+          console.error('Fehler beim Speichern des Users:', insertError)
+          throw new Error(`Fehler beim Speichern: ${insertError.message}`)
+        }
+
+        console.log('User erfolgreich in Users Tabelle gespeichert:', {
+          user_id: data.user.id,
+          email: data.user.email,
+          username: username
+        })
+      }
+
+      // Redirect zu Sign In
       router.push('/auth/signin')
+
+    } catch (error: any) {
+      console.error('SignUp Fehler:', error)
+      setErrorMsg(error.message || 'Ein unbekannter Fehler ist aufgetreten')
+    } finally {
+      setLoading(false)
     }
   }
 
