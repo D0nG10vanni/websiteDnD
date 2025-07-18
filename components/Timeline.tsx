@@ -160,8 +160,10 @@ function formatDisplayDate(dateStr: string): string {
   return `${day}.${month}.${year}`
 }
 
-// === Era Utils ===
+// === Era Utils === HIER SOLLEN STATT DEN DUMMY ERAS NOCH DIE KORREKTEN ERAS AUS SUPABASE GEZOGEN WERDEN
 export function getEraName(year: number): string {
+  const startYear = 100
+  
   if (year < -3000) return 'Zeitalter der Elfen'
   if (year < -500) return 'Zeitalter der Zwerge'
   if (year < 0) return 'Zeitalter der Konjunktion'
@@ -734,7 +736,6 @@ const YearMarker: React.FC<YearMarkerProps> = ({ marker }) => {
         {marker.year}
         {marker.type === 'epoch' && <span className="text-xs ml-1">⚡</span>}
         {marker.type === 'century' && <span className="text-xs ml-1">◆</span>}
-        {marker.hasEvents && <span className="text-xs ml-1">●</span>}
       </div>
     </div>
   )
@@ -1064,14 +1065,6 @@ export default function TimelineView({ gameId = 1, onSelect }: TimelineViewProps
               style={{ top: `${eraHeight + periodHeight + 40}px` }}
             >
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent rounded-full"></div>
-            </div>
-            
-            {/* Hauptlinie Label */}
-            <div 
-              className="absolute left-1/2 transform -translate-x-1/2 bg-black/80 px-3 py-1 rounded-full border border-amber-500/50"
-              style={{ top: `${eraHeight + periodHeight + 25}px` }}
-            >
-              <span className="text-amber-300 text-xs font-serif font-bold">⟦ ZEITLINIE ⟧</span>
             </div>
             
             {/* Events Label */}
