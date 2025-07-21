@@ -8,7 +8,8 @@ const TimeSpan: React.FC<TimeSpanProps> = ({
   entry, 
   startPercent, 
   widthPercent, 
-  lane, 
+  lane,
+  layoutSection, 
   onClick 
 }) => {
   const isEra = entry.dateType === 'era'
@@ -19,18 +20,15 @@ const TimeSpan: React.FC<TimeSpanProps> = ({
   let height = 0
   let barHeight = ''
   let zIndex = 10
-  
-  if (isEra) {
-    topOffset = 40 + lane * 45  // Äras ganz oben
-    height = 35
-    barHeight = 'h-3'
-    zIndex = 30
-  } else if (isPeriod) {
-    topOffset = 120 + lane * 35  // Perioden in der Mitte
-    height = 30
-    barHeight = 'h-2'
-    zIndex = 20
+
+  if (layoutSection) {
+    const laneHeight = entry.dateType === 'era' ? 45 : 35
+    height = entry.dateType === 'era' ? 35 : 30
+    topOffset = layoutSection.top + lane * laneHeight
+    barHeight = entry.dateType === 'era' ? 'h-3' : 'h-2'
+    zIndex = entry.dateType === 'era' ? 30 : 20
   }
+
   
   return (
     <div

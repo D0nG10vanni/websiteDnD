@@ -2,6 +2,62 @@
 
 import type { TimelineEntry, TimelineMetrics, YearMarker } from './types'
 
+// timelineUtils.ts
+
+export interface LayoutSection {
+  top: number
+  height: number
+}
+
+export interface LayoutMetrics {
+  totalHeight: number
+  mainLine: { top: number }
+  eraSection: LayoutSection
+  periodSection: LayoutSection
+  eventSection: LayoutSection
+}
+
+export function generateLayoutMetrics(
+  maxEraLanes: number,
+  maxPeriodLanes: number,
+  maxEventLanes: number
+): LayoutMetrics {
+  const spacing = {
+    era: 45,
+    period: 35,
+    event: 30,
+    gap: 30,
+    topOffset: 40,
+    mainLine: 240,
+  }
+
+  const eraHeight = maxEraLanes * spacing.era
+  const periodTop = spacing.topOffset + eraHeight + spacing.gap
+  const periodHeight = maxPeriodLanes * spacing.period
+  const eventTop = periodTop + periodHeight + spacing.gap
+  const eventHeight = maxEventLanes * spacing.event
+
+  const totalHeight = eventTop + eventHeight + spacing.topOffset
+
+  return {
+    totalHeight,
+    mainLine: { top: spacing.mainLine },
+    eraSection: {
+      top: spacing.topOffset,
+      height: eraHeight,
+    },
+    periodSection: {
+      top: periodTop,
+      height: periodHeight,
+    },
+    eventSection: {
+      top: eventTop,
+      height: eventHeight,
+    },
+  }
+}
+
+
 /**
  * Weist Timeline-Einträgen horizontale Lanes zu, um Überlappungen zu vermeiden
  */
@@ -195,6 +251,31 @@ export function calculateEntryPosition(
   const widthPercent = Math.max(1, endPercent - startPercent) // Mindestbreite von 1%
   
   return { startPercent, endPercent, widthPercent }
+}
+
+/**
+ * Berechnet die vertikale Position eines Events, um Überlappungen zu vermeiden
+ */
+
+export function assignVerticalEventLanes(events: TimelineEntry[]): TimelineEntry[] {
+  const lanes: TimelineEntry[][] = []
+
+  for (const event of events) {
+    const start = event.startYear
+
+    // Finde erste freie Lane (keine Überlappung im Jahr)
+    let laneIndex = 0
+    while (lanes[laneIndex]?.some(e => Math.abs(e.startYear - start) < 10)) {
+      laneIndex++
+    }
+
+    if (!lanes[laneIndex]) lanes[laneIndex] = []
+    lanes[laneIndex].push(event)
+
+    event.verticalLane = laneIndex // ← neue Property für vertikale Platzierung
+  }
+
+  return events
 }
 
 /**

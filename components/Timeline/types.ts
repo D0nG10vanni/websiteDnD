@@ -28,6 +28,7 @@ export type TimelineEntry = {
   duration?: number
   lane: number
   dbEntry: TimelineDBEntry
+  verticalLane?: number
 }
 
 export type TimeRange = {
@@ -92,6 +93,10 @@ export type TimeSpanProps = {
   widthPercent: number
   lane: number
   onClick: () => void
+  layoutSection?: {
+    top: number
+    height: number
+  }
 }
 
 export type PointEventProps = {
@@ -99,6 +104,11 @@ export type PointEventProps = {
   positionPercent: number
   lane: number
   onClick: () => void
+  layoutSection?: {
+    top: number
+    height: number
+  }
+  mainLineTop?: number
 }
 
 export type YearMarkerProps = {

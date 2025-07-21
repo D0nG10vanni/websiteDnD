@@ -3,13 +3,14 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react'
 import { Dialog } from '@headlessui/react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
+import { generateLayoutMetrics } from './timelineUtils'
 
 // Global Auth Context (bereits vorhanden)
 import { useAuth } from '@/lib/AuthContext'
 
 // Unsere extrahierten Utils und Types
 import type { TimelineEntry, TimelineDBEntry, FilteredEntries, TimelineViewProps } from './types'
-import { fetchTimelineData } from '.././SupaBaseClients'
+import { fetchTimelineData } from './../SupaBaseClients'
 import { getEraName, getUniqueEraNames } from './eraUtils'
 import { 
   parseMultipleDBEntries, 
@@ -20,7 +21,7 @@ import {
   assignHorizontalLanes,
   calculateTimelineMetrics,
   calculateEntryPosition,
-  calculateMaxLanes,
+  calculateMaxLanes,  
   calculateTimelineHeight,
   extractYearRange
 } from './timelineUtils'
@@ -70,7 +71,7 @@ export default function TimelineView({ gameId = 1, onSelect }: TimelineViewProps
     loadTimelineData()
   }, [gameId])
 
-  // Verarbeitung der Timeline-Daten
+  // Verarbeitung der Timeline-Daten mit verbesserter Lane-Logik
   const { 
     erasEntries, 
     periodEntries, 
@@ -103,10 +104,10 @@ export default function TimelineView({ gameId = 1, onSelect }: TimelineViewProps
     // Separiere nach Typen
     const { eras, periods, events } = separateEntriesByType(sorted)
     
-    // Weise Lanes zu
+    // Separate Lane-Zuordnung für jeden Typ mit verbesserter Kollisionserkennung
     const erasWithLanes = assignHorizontalLanes(eras)
     const periodsWithLanes = assignHorizontalLanes(periods)
-    const eventsWithLanes = assignHorizontalLanes(events)
+    const eventsWithLanes = assignHorizontalLanes(events) // ← Spezielle Event-Logik
     
     // Berechne maximale Lanes
     const { maxEraLanes, maxPeriodLanes, maxEventLanes } = calculateMaxLanes(
@@ -251,10 +252,10 @@ export default function TimelineView({ gameId = 1, onSelect }: TimelineViewProps
     )
   }
 
-  // Berechne Timeline-Metriken
+  // Berechne Timeline-Metriken mit neuem Layout-System
   const allFilteredEntries = [...filteredEntries.eras, ...filteredEntries.periods, ...filteredEntries.events]
   const timelineMetrics = calculateTimelineMetrics(allFilteredEntries, 1200, zoomLevel)
-  const timelineHeight = calculateTimelineHeight(maxEraLanes, maxPeriodLanes, maxEventLanes)
+  const layoutMetrics = generateLayoutMetrics(maxEraLanes, maxPeriodLanes, maxEventLanes)
   const totalEvents = filteredEntries.eras.length + filteredEntries.periods.length + filteredEntries.events.length
 
   return (
@@ -303,16 +304,16 @@ export default function TimelineView({ gameId = 1, onSelect }: TimelineViewProps
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2">
-              <div className="w-4 h-3 bg-gradient-to-r from-purple-700 to-indigo-900 rounded border border-purple-400"></div>
-              <span className="text-amber-200/80 text-sm font-serif">👑 Äras</span>
+              <div className="w-4 h-3 bg-gradient-to-br from-purple-700 to-indigo-900 rounded border border-purple-400"></div>
+              <span className="text-amber-200/80 text-sm font-serif">👑 Äras sind ganz oben</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-4 h-2 bg-gradient-to-r from-blue-600 to-cyan-700 rounded border border-blue-400"></div>
-              <span className="text-amber-200/80 text-sm font-serif">📜 Perioden</span>
+              <div className="w-4 h-3 bg-gradient-to-br from-green-700 to-yellow-900 rounded border border-green-400"></div>
+              <span className="text-amber-200/80 text-sm font-serif">📜 Perioden sind in der Mitte</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-gradient-to-br from-red-700 to-pink-800 rounded-full border border-white"></div>
-              <span className="text-amber-200/80 text-sm font-serif">⚡ Events</span>
+              <div className="w-4 h-3 bg-gradient-to-br from-red-700 to-pink-800 rounded border border-white"></div>
+              <span className="text-amber-200/80 text-sm font-serif">⚡ Events sind die Dots</span>
             </div>
           </div>
           <div className="text-amber-200/60 text-sm font-serif">
@@ -326,22 +327,61 @@ export default function TimelineView({ gameId = 1, onSelect }: TimelineViewProps
         <div className="overflow-auto" style={{ maxHeight: '700px' }} onWheel={handleScroll}>
           <div 
             className="relative w-full border border-white/10 rounded-lg bg-gradient-to-b from-black/20 to-black/40" 
-            style={{ height: `${timelineHeight}px`, minWidth: `${timelineMetrics.width}px` }}
+            style={{ height: `${layoutMetrics.totalHeight}px`, minWidth: `${timelineMetrics.width}px` }}
           >
             
-            {/* Bereichs-Trenner und Labels werden hier eingefügt */}
-            {/* ... (wie im Original, aber sauberer strukturiert) */}
+            {/* Sektion-Labels und Trenner */}
+            <div className="absolute left-4 font-serif text-purple-300 text-sm font-medium" style={{ top: `${layoutMetrics.eraSection.top - 20}px` }}>
+              👑 Äras
+            </div>
+            <div className="absolute w-full border-t border-dashed border-purple-400/30" style={{ top: `${layoutMetrics.eraSection.top + layoutMetrics.eraSection.height + 10}px` }} />
+        
+            <div className="absolute left-4 font-serif text-blue-300 text-sm font-medium" style={{ top: `${layoutMetrics.periodSection.top - 20}px` }}>
+              📜 Perioden
+            </div>
+            <div className="absolute w-full border-t border-dashed border-blue-400/30" style={{ top: `${layoutMetrics.periodSection.top + layoutMetrics.periodSection.height + 10}px` }} />
             
-            {/* Jahresmarkierungen */}
+            {/* Hauptlinie (horizontal, prominent) */}
+            <div 
+              className="absolute w-full h-2 bg-gradient-to-r from-amber-600 via-amber-400 to-amber-600 rounded-full shadow-lg" 
+              style={{ top: `${layoutMetrics.mainLine.top}px` }}
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent rounded-full"></div>
+              {/* Hauptlinie Label */}
+              <div className="absolute -left-4 top-1/2 transform -translate-y-1/2 -translate-x-full">
+                <div className="bg-amber-900/80 text-amber-100 text-xs px-2 py-1 rounded border border-amber-600/50 font-serif">
+                  Timeline
+                </div>
+              </div>
+            </div>
+            
+            <div className="absolute left-4 font-serif text-green-300 text-sm font-medium" style={{ top: `${layoutMetrics.eventSection.top - 20}px` }}>
+              ⚡ Events
+            </div>
+            
+            {/* Dynamische Jahresmarkierungen */}
             {timelineMetrics.yearMarkers.map((marker) => (
               <YearMarker 
                 key={marker.year} 
                 marker={{
                   ...marker,
-                  top: maxEraLanes * 45 + maxPeriodLanes * 35 + 75
+                  top: layoutMetrics.mainLine.top - 25
                 }} 
               />
             ))}
+
+            {/* Timeline-Info */}
+            <div className="absolute text-amber-300/60 text-xs font-serif bg-black/60 px-2 py-1 rounded" style={{ left: '20px', top: `${layoutMetrics.totalHeight - 30}px` }}>
+              {timelineMetrics.span} Jahre • {timelineMetrics.pixelsPerYear.toFixed(1)} px/Jahr • {Math.round(timelineMetrics.width)}px
+            </div>
+
+            {/* Start/Ende Markierungen */}
+            <div className="absolute text-amber-400 text-sm font-serif font-bold bg-black/80 px-3 py-1 rounded border border-amber-500/50" style={{ left: '20px', top: '10px' }}>
+              ⟦ {timelineMetrics.minYear} ⟧
+            </div>
+            <div className="absolute text-amber-400 text-sm font-serif font-bold bg-black/80 px-3 py-1 rounded border border-amber-500/50" style={{ right: '20px', top: '10px' }}>
+              ⟦ {timelineMetrics.maxYear} ⟧
+            </div>
 
             {/* Äras rendern */}
             {filteredEntries.eras.map(entry => {
@@ -356,6 +396,7 @@ export default function TimelineView({ gameId = 1, onSelect }: TimelineViewProps
                   widthPercent={widthPercent}
                   lane={entry.lane}
                   onClick={() => handleEntryClick(entry)}
+                  layoutSection={layoutMetrics.eraSection}
                 />
               )
             })}
@@ -373,21 +414,23 @@ export default function TimelineView({ gameId = 1, onSelect }: TimelineViewProps
                   widthPercent={widthPercent}
                   lane={entry.lane}
                   onClick={() => handleEntryClick(entry)}
+                  layoutSection={layoutMetrics.periodSection}
                 />
               )
             })}
 
-            {/* Events rendern */}
+            {/* Events rendern (jetzt unterhalb der Timeline) */}
             {filteredEntries.events.map(entry => {
-              const { startPercent } = calculateEntryPosition(
-                entry, timelineMetrics.minYear, timelineMetrics.span
-              )
+              const { startPercent } = calculateEntryPosition(entry, timelineMetrics.minYear, timelineMetrics.span)
+
               return (
                 <PointEvent
-                  key={`event-${entry.id}-${entry.lane}`}
+                  key={`event-${entry.id}-${entry.verticalLane}`}
                   entry={entry}
                   positionPercent={startPercent}
-                  lane={entry.lane}
+                  lane={entry.verticalLane || 0}
+                  layoutSection={layoutMetrics.eventSection}
+                  mainLineTop={layoutMetrics.mainLine.top}
                   onClick={() => handleEntryClick(entry)}
                 />
               )
@@ -398,7 +441,7 @@ export default function TimelineView({ gameId = 1, onSelect }: TimelineViewProps
 
       {/* Entry Detail Modal */}
       <EntryDetailModal 
-        selectedEntry={selectedEntry}
+        selectedEntry={selectedEntry} 
         onClose={() => setSelectedEntry(null)}
       />
     </div>
