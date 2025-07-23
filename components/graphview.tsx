@@ -30,6 +30,9 @@ interface GraphViewProps {
   height?: number;
 }
 
+type FolderColorMap = Map<number, string> // folder_id → farbwert
+type ParentFolderMap = Map<number, number> // child_id → top_level_id
+
 export default function GraphView({ 
   articles, 
   folders = [], 
@@ -41,7 +44,45 @@ export default function GraphView({
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const [activeArticle, setActiveArticle] = useState<Post | null>(null);
+  const folderMap = new Map(folders.map(f => [f.id, f]));
+  const topLevelFolders = folders.filter(f => f.parent_id === null);
 
+  // 1. Farbschema für Top-Level-Folder
+  const topLevelColors = d3.schemeCategory10; // 10 eindeutige Farben
+  
+  // 2. Map: Top-Level-Folder-ID → Farbe
+  const topLevelColorMap = new Map<number, string>();
+    topLevelFolders.forEach((folder, index) => {
+      topLevelColorMap.set(folder.id, topLevelColors[index % topLevelColors.length]);
+    });
+
+    const resolveTopLevelId = (folderId: number): number => {
+    let current = folderMap.get(folderId);
+    while (current && current.parent_id !== null) {
+      current = folderMap.get(current.parent_id);
+    }
+    return current?.id ?? folderId;
+  };
+
+  // Farbmapping für Top-Level-Ordner erstellen
+  const folderColorMap = new Map<number, string>();
+  folders.forEach((folder) => {
+    const topId = resolveTopLevelId(folder.id);
+    const baseColor = d3.color(topLevelColorMap.get(topId) || '#888');
+
+    if (baseColor) {
+      if (folder.id === topId) {
+        folderColorMap.set(folder.id, baseColor.formatHex());
+      } else {
+        // Unterordner → dunklere Abstufung
+        const darker = baseColor.darker(1 + Math.random()); // optional variiert
+        folderColorMap.set(folder.id, darker.formatHex());
+      }
+    } else {
+      // fallback color if baseColor is null
+      folderColorMap.set(folder.id, '#888');
+    }
+  });
   // Extract wiki links from content
   const extractWikiLinks = (content: string): string[] => {
     const regex = /\[\[([^\]|]+)(\|[^\]]+)?\]\]/g;
@@ -79,6 +120,15 @@ export default function GraphView({
     return folderColorMap.get(folderId) || '#f59e0b';
     };
 
+    // Zähle incoming Links auch mit
+    const incomingCount = new Map<string, number>();
+    articles.forEach(article => {
+      const links = extractWikiLinks(article.content);
+      links.forEach(target => {
+        const key = target.trim();
+        incomingCount.set(key, (incomingCount.get(key) || 0) + 1);
+      });
+    });
     
     // Create nodes
     const nodes: GraphNode[] = articles.map(article => {
@@ -86,15 +136,18 @@ export default function GraphView({
     const folderId = article.folder_id != null ? Number(article.folder_id) : null;
     const folderName = folderId != null ? folderMap.get(folderId) : 'Unkategorisiert';
 
+    const outgoing = links.length;
+    const incoming = incomingCount.get(article.title) || 0;
+
     return {
-        id: article.title,
-        title: article.title,
-        content: article.content,
-        folderId,
-        folderName,
-        connections: links.length
+      id: article.title,
+      title: article.title,
+      content: article.content,
+      folderId,
+      folderName,
+      connections: outgoing + incoming // neue Berechnung
     };
-    });
+  });
 
     // Create links
     const links: GraphLink[] = [];
