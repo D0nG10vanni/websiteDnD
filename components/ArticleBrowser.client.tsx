@@ -452,16 +452,22 @@ export default function ArticleBrowser({
 
             <div className="flex gap-2">
               <Link
-                href={`/games/${gameId}/ArticleView/NeuerArtikel`}
+                href={`/games/${gameId}/ArticleView/WriteArticle`}
                 className="px-3 py-2 border border-amber-900/40 rounded-sm font-serif text-xs text-amber-200/80 bg-amber-900/10 hover:bg-amber-900/30 transition-colors"
               >
-                ✎ Neuer Artikel
+              ✎ Neuer Artikel
               </Link>
               <Link
-                href={`/games/${gameId}/ArticleView/Ordnerstruktur`}
-                className="px-3 py-2 border border-amber-900/40 rounded-sm font-serif text-xs text-amber-200/80 bg-amber-900/10 hover:bg-amber-900/30 transition-colors"
+              href={`/games/${gameId}/ArticleView/NeuerArtikel`}
+              className="px-3 py-2 border border-amber-900/40 rounded-sm font-serif text-xs text-amber-200/80 bg-amber-900/10 hover:bg-amber-900/30 transition-colors"
               >
-                📁 Ordner
+              ⬆ Artikel hochladen
+              </Link>
+              <Link
+              href={`/games/${gameId}/ArticleView/Ordnerstruktur`}
+              className="px-3 py-2 border border-amber-900/40 rounded-sm font-serif text-xs text-amber-200/80 bg-amber-900/10 hover:bg-amber-900/30 transition-colors"
+              >
+              📁 Ordner
               </Link>
             </div>
 
