@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useParams, useRouter } from 'next/navigation'
-import { useSupabaseClient, useUser } from '@supabase/auth-helpers-react'
+import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabaseClient'  // Direkter Import wie in Upload-Seite
 import type { Post } from '@/lib/types'
 
 // Komponenten
@@ -17,31 +17,30 @@ import ArticleFormStyles from '@/components/article/ArticleFormStyles'
 // Custom Hook
 import { useArticleDraft } from '@/components/article/useArticleDraft'
 
-export default function NeuerArtikelPage() {
-  const params = useParams()
+type Folder = { 
+  id: number; 
+  name: string; 
+  parent_id: number | null; 
+  game_id: number;
+  creator_uuid: string;
+};
+
+export default function NeuerArtikelPage({ gameId = 1 }: { gameId?: number }) {
   const router = useRouter()
-  const gameId = parseInt(params?.id as string, 10)
-  const supabase = useSupabaseClient()
-  const user = useUser()
+  // Entferne useSupabaseClient und useUser - verwende direkten supabase import
 
   // State
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
   const [previewContent, setPreviewContent] = useState('')
   const [folderId, setFolderId] = useState<number | null>(null)
-  // Define a Folder type or import it if available
-  type Folder = {
-    id: number
-    name: string
-    // add other folder fields as needed
-    [key: string]: any
-  }
   const [folders, setFolders] = useState<Folder[]>([])
   const [articles, setArticles] = useState<Post[]>([])
   const [isSaving, setIsSaving] = useState(false)
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
   const [showPreview, setShowPreview] = useState(true)
   const [isLoadingFolders, setIsLoadingFolders] = useState(true)
+  const [userUuid, setUserUuid] = useState<string | null>(null)
   
   // Refs für Live-Rendering
   const lastLineRef = useRef('')
@@ -59,55 +58,65 @@ export default function NeuerArtikelPage() {
     setPreviewContent
   })
 
-  // Lade Ordner und Artikel beim Mount
+  // Lade Benutzer und Ordner beim Mount - genau wie in der Upload-Seite
   useEffect(() => {
-    if (!gameId || isNaN(gameId)) {
-      console.error('Invalid gameId:', gameId)
-      return
-    }
+    fetchUserAndFolders();
+  }, [gameId]);
 
-    const loadData = async () => {
+  async function fetchUserAndFolders() {
+    setIsLoadingFolders(true);
+    try {
       console.log('Loading data for gameId:', gameId)
-      setIsLoadingFolders(true)
       
-      try {
-        // Ordner laden
-        const { data: foldersData, error: foldersError } = await supabase
-          .from('folders')
-          .select('*')
-          .eq('game_id', gameId)
-        
-        console.log('Folders query result:', { foldersData, foldersError })
-        
-        if (foldersError) {
-          console.error('Fehler beim Laden der Ordner:', foldersError)
-          alert('Fehler beim Laden der Ordner: ' + foldersError.message)
-        } else {
-          console.log('Loaded folders:', foldersData)
-          setFolders(foldersData || [])
-        }
-
-        // Artikel laden (für Wiki-Links)
-        const { data: articlesData, error: articlesError } = await supabase
-          .from('posts')
-          .select('*')
-          .eq('game_id', gameId)
-        
-        if (articlesError) {
-          console.error('Fehler beim Laden der Artikel:', articlesError)
-        } else {
-          setArticles(articlesData || [])
-        }
-      } catch (error) {
-        console.error('Unexpected error loading data:', error)
-        alert('Ein unerwarteter Fehler ist beim Laden der Daten aufgetreten.')
-      } finally {
-        setIsLoadingFolders(false)
+      // Benutzer abrufen - exakt wie in der Upload-Seite
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+      
+      if (userError || !user) {
+        console.error('Fehler beim Abrufen des Benutzers:', userError)
+        alert('Fehler beim Abrufen des Benutzers.');
+        setIsLoadingFolders(false);
+        return;
       }
-    }
 
-    loadData()
-  }, [gameId, supabase])
+      setUserUuid(user.id);
+
+      // Ordner für das aktuelle Spiel abrufen - exakt wie in der Upload-Seite
+      const { data: foldersData, error: foldersError } = await supabase
+        .from('folders')
+        .select('*')
+        .eq('game_id', gameId)
+        .order('name');
+        
+      console.log('Folders query result:', { foldersData, foldersError })
+      
+      if (foldersError) {
+        console.error('Error fetching folders:', foldersError);
+        alert('Fehler beim Laden der Ordner: ' + foldersError.message);
+      } else {
+        console.log('Loaded folders:', foldersData)
+        setFolders(foldersData || []);
+      }
+
+      // Artikel laden (für Wiki-Links)
+      const { data: articlesData, error: articlesError } = await supabase
+        .from('posts')
+        .select('*')
+        .eq('game_id', gameId)
+      
+      if (articlesError) {
+        console.error('Fehler beim Laden der Artikel:', articlesError)
+      } else {
+        setArticles(articlesData || [])
+      }
+    } catch (err) {
+      console.error('Error fetching user and folders:', err);
+      alert('Fehler beim Laden der Daten.');
+    }
+    setIsLoadingFolders(false);
+  }
 
   // Live-Rendering bei Enter-Taste
   const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -202,14 +211,14 @@ export default function NeuerArtikelPage() {
     }
   }
 
-  // Speichern
+  // Speichern - angepasst an die Upload-Seite
   const handleSave = async () => {
     if (!title.trim()) {
       alert('Bitte gib einen Titel für den Artikel ein.')
       return
     }
 
-    if (!user) {
+    if (!userUuid) {
       alert('Du musst angemeldet sein, um Artikel zu erstellen.')
       return
     }
@@ -217,14 +226,18 @@ export default function NeuerArtikelPage() {
     setIsSaving(true)
     
     try {
+      const folderName = folders.find(f => f.id === folderId)?.name ?? null;
+      
       const { data, error } = await supabase
         .from('posts')
         .insert({
           title: title.trim(),
           content: content.trim(),
+          creator: userUuid,  // Wie in der Upload-Seite
           game_id: gameId,
           folder_id: folderId,
-          user_id: user.id
+          kategorie: folderName,  // Wie in der Upload-Seite
+          created_at: new Date().toISOString(),
         })
         .select()
         .single()
@@ -247,12 +260,27 @@ export default function NeuerArtikelPage() {
     }
   }
 
-  if (isNaN(gameId)) {
+  // Loading Screen wie in der Upload-Seite
+  if (isLoadingFolders) {
     return (
-      <div className="min-h-screen bg-base-200 p-6 flex items-center justify-center">
-        <div className="text-center text-error">
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex flex-col items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-amber-400 border-t-transparent rounded-full animate-spin mb-4"></div>
+          <p className="text-amber-200 font-serif text-lg">Lade Ordnerstruktur...</p>
+          <div className="text-amber-300 text-xs font-serif opacity-50 mt-2">✧ Die Bibliothek öffnet sich ✧</div>
+        </div>
+      </div>
+    )
+  }
+
+  // Fehler wenn gameId ungültig
+  if (!gameId || isNaN(gameId) || gameId <= 0) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-6 flex items-center justify-center">
+        <div className="text-center text-red-400">
           <h1 className="text-2xl font-bold">Ungültige Spiel-ID</h1>
           <p>Die angegebene Spiel-ID ist nicht gültig.</p>
+          <p className="text-xs mt-2">Erhaltene ID: {gameId}</p>
         </div>
       </div>
     )
@@ -272,6 +300,8 @@ export default function NeuerArtikelPage() {
             folderId={folderId}
             setFolderId={setFolderId}
             folders={folders}
+            gameId={gameId}
+            isLoadingFolders={isLoadingFolders}
           />
 
           <ArticleToolbar

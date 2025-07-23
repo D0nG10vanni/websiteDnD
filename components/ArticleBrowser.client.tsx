@@ -1,10 +1,12 @@
+// components/ArticleBrowser.client.tsx
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import MarkdownRenderer from '@/components/MarkdownRenderer'
 import { supabase } from '@/lib/supabaseClient'
 import type { Post, Folder } from '@/lib/types'
 import Link from 'next/link'
+import { ArticleViewer } from './articleBrowser/ArticleViewer'
+import { FolderView } from './articleBrowser/FolderView'
 
 interface Props {
   articles: Post[]
@@ -31,8 +33,6 @@ export default function ArticleBrowser({
 }: Props) {
   const [folders, setFolders] = useState<Folder[]>([])
   const [selected, setSelected] = useState<Post | null>(null)
-  const [content, setContent] = useState<string | null>(null)
-  const [isLoadingContent, setIsLoadingContent] = useState(false)
   const [query, setQuery] = useState<string>('')
   const [deleteMode, setDeleteMode] = useState(false)
   const [collapsedFolders, setCollapsedFolders] = useState<Set<number>>(new Set())
@@ -56,7 +56,6 @@ export default function ArticleBrowser({
     const success = await onDeleteArticle(id);
     if (success && selected?.id === id) {
       setSelected(null);
-      setContent(null);
     }
   }
 
@@ -77,7 +76,6 @@ export default function ArticleBrowser({
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('text/plain', article.id.toString())
     
-    // Visual feedback
     if (e.currentTarget instanceof HTMLElement) {
       e.currentTarget.style.opacity = '0.5'
     }
@@ -102,21 +100,17 @@ export default function ArticleBrowser({
     
     const currentFolderId = draggedArticle.folder_id
     
-    // Keine Änderung wenn gleicher Ordner
     if (currentFolderId === targetFolderId) return
     
-    // Prüfen ob bereits eine ausstehende Änderung für diesen Artikel existiert
     const existingMoveIndex = pendingMoves.findIndex(move => move.articleId === draggedArticle.id)
     
     if (existingMoveIndex >= 0) {
-      // Bestehende Änderung aktualisieren
       setPendingMoves(prev => {
         const newMoves = [...prev]
         newMoves[existingMoveIndex].newFolderId = targetFolderId
         return newMoves
       })
     } else {
-      // Neue ausstehende Änderung hinzufügen
       setPendingMoves(prev => [...prev, {
         articleId: draggedArticle.id,
         oldFolderId: currentFolderId,
@@ -124,7 +118,6 @@ export default function ArticleBrowser({
       }])
     }
 
-    // Visual feedback entfernen
     const dropZones = document.querySelectorAll('.drop-zone')
     dropZones.forEach(zone => zone.classList.remove('drop-active'))
   }
@@ -147,7 +140,6 @@ export default function ArticleBrowser({
     
     setIsSaving(true)
     try {
-      // Alle Änderungen an Supabase senden
       for (const move of pendingMoves) {
         const { error } = await supabase
           .from('posts')
@@ -160,7 +152,6 @@ export default function ArticleBrowser({
         }
       }
       
-      // Lokale Artikel-Liste aktualisieren
       pendingMoves.forEach(move => {
         const article = articles.find(a => a.id === move.articleId)
         if (article) {
@@ -169,7 +160,6 @@ export default function ArticleBrowser({
         }
       })
       
-      // Ausstehende Änderungen zurücksetzen
       setPendingMoves([])
       
     } catch (error) {
@@ -201,47 +191,10 @@ export default function ArticleBrowser({
   )
 
   useEffect(() => {
-    if (!selected) return
-    setContent(null)
-    setIsLoadingContent(true)
-    ;(async () => {
-      const { data, error } = await supabase
-        .from('posts')
-        .select('content')
-        .eq('id', selected.id)
-        .single()
-      if (error) {
-        console.error(error)
-        setContent('*Die Zeichen verblassen vor deinen Augen…*')
-      } else {
-        setContent(data.content)
-      }
-      setIsLoadingContent(false)
-    })()
-  }, [selected])
-
-  // Reset selected article if it was deleted
-  useEffect(() => {
     if (selected && !articles.find(a => a.id === selected.id)) {
       setSelected(null);
-      setContent(null);
     }
   }, [articles, selected]);
-
-  const folderMap = useMemo(() => {
-    const map: Record<number, Folder & { children: Folder[] }> = {}
-    folders.forEach((f) => {
-      map[f.id] = { ...f, children: [] }
-    })
-    Object.values(map).forEach((f) => {
-      if (f.parent_id != null && map[f.parent_id]) {
-        map[f.parent_id].children.push(f)
-      }
-    })
-    return map
-  }, [folders])
-
-  const rootFolders = useMemo(() => folders.filter((f) => f.parent_id == null), [folders])
 
   const articlesByFolder = useMemo(() => {
     const m: Record<number, Post[]> = {}
@@ -257,158 +210,6 @@ export default function ArticleBrowser({
   }, [filtered, pendingMoves])
 
   const uncategorized = filtered.filter((a) => !getEffectiveFolderId(a))
-
-  const renderArticleItem = (article: Post) => {
-    const isPending = pendingMoves.some(move => move.articleId === article.id)
-    
-    return (
-      <div 
-        key={article.id} 
-        className={`group flex items-center gap-2 py-2 px-3 rounded transition-all border-b border-amber-900/20 cursor-move select-none ${
-          isPending ? 'bg-amber-900/30 border-amber-600/50' : 'hover:bg-amber-900/20'
-        }`}
-        draggable={!deleteMode}
-        onDragStart={(e) => handleDragStart(e, article)}
-        onDragEnd={handleDragEnd}
-      >
-        <div className="text-amber-500/50 text-xs mr-1">⋮⋮</div>
-        <div className="truncate flex-1 min-w-0">
-          <button
-            onClick={() => setSelected(article)}
-            className={`w-full text-left truncate font-serif text-sm transition-colors ${
-              selected?.id === article.id 
-                ? 'text-amber-200 font-medium' 
-                : 'text-amber-300/70 hover:text-amber-200'
-            } ${isPending ? 'text-amber-100' : ''}`}
-            title={article.title}
-          >
-            <span className="text-amber-500/70 mr-2">✧</span>
-            {article.title}
-            {isPending && <span className="text-amber-400 ml-2 text-xs">●</span>}
-          </button>
-        </div>
-        {deleteMode && (
-          <button
-            onClick={() => handleDelete(article.id)}
-            className="opacity-0 group-hover:opacity-100 px-2 py-1 text-red-400 hover:text-red-300 transition-all"
-            title="Artikel löschen"
-          >
-            ×
-          </button>
-        )}
-      </div>
-    )
-  }
-
-  const renderSubFolder = (folder: Folder & { children: Folder[] }, depth: number = 0) => {
-    const items = articlesByFolder[folder.id] || []
-    const isCollapsed = collapsedFolders.has(folder.id)
-    const hasContent = items.length > 0 || folder.children.length > 0
-    
-    if (!hasContent) return null
-
-    return (
-      <div key={folder.id} className={`${depth > 0 ? 'ml-4 border-l border-amber-900/30 pl-3' : ''} mb-3`}>
-        <div className="flex items-center gap-2 mb-2">
-          <button
-            onClick={() => toggleFolder(folder.id)}
-            className="flex items-center gap-2 font-serif text-sm text-amber-400 hover:text-amber-300 transition-colors group"
-          >
-            <span className="transform transition-transform text-xs">
-              {isCollapsed ? '▶' : '▼'}
-            </span>
-            <span className="text-amber-600">◆</span>
-            <span className="font-medium">{folder.name}</span>
-            <span className="text-amber-600/60 text-xs">
-              ({items.length})
-            </span>
-          </button>
-        </div>
-
-        {!isCollapsed && (
-          <div 
-            className="space-y-1 drop-zone rounded-md min-h-[50px] transition-colors"
-            onDrop={(e) => handleDrop(e, folder.id)}
-            onDragOver={handleDragOver}
-            onDragEnter={handleDragEnter}
-            onDragLeave={handleDragLeave}
-          >
-            {items.length > 0 && (
-              <div className="space-y-1">
-                {items.slice(0, 15).map((article) => renderArticleItem(article))}
-                {items.length > 15 && (
-                  <div className="text-amber-500/60 text-xs italic px-3 py-2">
-                    ... und {items.length - 15} weitere Artikel
-                  </div>
-                )}
-              </div>
-            )}
-            
-            {folder.children.length > 0 && (
-              <div className="mt-3 space-y-2">
-                {folder.children.map((child) => renderSubFolder(folderMap[child.id], depth + 1))}
-              </div>
-            )}
-            
-            {items.length === 0 && folder.children.length === 0 && (
-              <div className="text-center py-4 text-amber-500/30 text-xs italic">
-                Ziehe Artikel hierher
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    )
-  }
-
-  const renderTabContent = (folder: Folder & { children: Folder[] }) => {
-    const directItems = articlesByFolder[folder.id] || []
-    
-    return (
-      <div 
-        className="bg-black/20 rounded-lg border border-amber-900/30 p-4 min-h-[300px] drop-zone transition-colors"
-        onDrop={(e) => handleDrop(e, folder.id)}
-        onDragOver={handleDragOver}
-        onDragEnter={handleDragEnter}
-        onDragLeave={handleDragLeave}
-      >
-        <div className="space-y-3">
-          {/* Direkte Artikel in diesem Ordner */}
-          {directItems.length > 0 && (
-            <div>
-              <div className="text-amber-400 text-sm font-serif mb-2 border-b border-amber-900/30 pb-1">
-                Artikel in {folder.name}
-              </div>
-              <div className="space-y-1">
-                {directItems.slice(0, 10).map((article) => renderArticleItem(article))}
-                {directItems.length > 10 && (
-                  <div className="text-amber-500/60 text-xs italic px-3 py-2">
-                    ... und {directItems.length - 10} weitere Artikel
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-          
-          {/* Unterordner */}
-          {folder.children.length > 0 && (
-            <div>
-              {directItems.length > 0 && <div className="border-t border-amber-900/30 pt-3 mt-3"></div>}
-              <div className="space-y-3">
-                {folder.children.map((child) => renderSubFolder(folderMap[child.id]))}
-              </div>
-            </div>
-          )}
-          
-          {directItems.length === 0 && folder.children.length === 0 && (
-            <div className="text-center py-8 text-amber-200/30 italic font-serif">
-              Ziehe Artikel in diesen Bereich
-            </div>
-          )}
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="space-y-6">
@@ -501,98 +302,34 @@ export default function ArticleBrowser({
             Die alten Schriften werden aus den Archiven geholt…
           </div>
         ) : (
-          <>
-            {/* Tabs als horizontale Spalten */}
-            <div className="grid auto-cols-fr grid-flow-col">
-              {/* Root-Ordner als Tabs */}
-              {rootFolders.map((folder) => (
-                <div key={folder.id} className="border-r border-amber-900/30 last:border-r-0">
-                  <div className="bg-amber-900/20 border-b border-amber-900/30 p-3 text-center">
-                    <div className="font-serif text-amber-200 font-medium">
-                      <span className="text-amber-500">♦</span> {folder.name}
-                    </div>
-                    <div className="text-amber-600/60 text-xs mt-1">
-                      {(articlesByFolder[folder.id]?.length || 0) + 
-                       folderMap[folder.id]?.children.reduce((acc, child) => 
-                         acc + (articlesByFolder[child.id]?.length || 0), 0) || 0} Artikel
-                    </div>
-                  </div>
-                  <div className="p-4">
-                    {renderTabContent(folderMap[folder.id])}
-                  </div>
-                </div>
-              ))}
-              
-              {/* Unkategorisierte Artikel */}
-              {(uncategorized.length > 0 || rootFolders.length === 0) && (
-                <div className="border-r border-amber-900/30 last:border-r-0">
-                  <div className="bg-amber-900/20 border-b border-amber-900/30 p-3 text-center">
-                    <div className="font-serif text-amber-200 font-medium">
-                      <span className="text-amber-500">♦</span> Unkategorisiert
-                    </div>
-                    <div className="text-amber-600/60 text-xs mt-1">
-                      {uncategorized.length} Artikel
-                    </div>
-                  </div>
-                  <div className="p-4">
-                    <div 
-                      className="bg-black/20 rounded-lg border border-amber-900/30 p-4 min-h-[300px] drop-zone transition-colors"
-                      onDrop={(e) => handleDrop(e, null)}
-                      onDragOver={handleDragOver}
-                      onDragEnter={handleDragEnter}
-                      onDragLeave={handleDragLeave}
-                    >
-                      <div className="space-y-1">
-                        {uncategorized.slice(0, 15).map((article) => renderArticleItem(article))}
-                        {uncategorized.length > 15 && (
-                          <div className="text-amber-500/60 text-xs italic px-3 py-2">
-                            ... und {uncategorized.length - 15} weitere Artikel
-                          </div>
-                        )}
-                        {uncategorized.length === 0 && (
-                          <div className="text-center py-8 text-amber-200/30 italic font-serif">
-                            Ziehe Artikel hierher um sie zu entkategorisieren
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </>
+          <FolderView
+            folders={folders}
+            articles={articles}
+            articlesByFolder={articlesByFolder}
+            uncategorized={uncategorized}
+            collapsedFolders={collapsedFolders}
+            selectedId={selected?.id}
+            deleteMode={deleteMode}
+            pendingMoves={pendingMoves}
+            onToggleFolder={toggleFolder}
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onSelectArticle={setSelected}
+            onDeleteArticle={handleDelete}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+          />
         )}
       </div>
 
       {/* Ausgewählter Artikel */}
-      {selected && (
-        <div className="bg-black/20 backdrop-blur-sm rounded-lg border border-amber-900/30 shadow-[0_0_20px_rgba(0,0,0,0.5)] p-8">
-          {isLoadingContent ? (
-            <div className="text-center py-16 text-amber-200/50 italic font-serif">
-              Die mystischen Runen enthüllen sich langsam…
-            </div>
-          ) : content ? (
-            <>
-              <h2 className="font-serif text-2xl text-center mb-6 text-amber-200 tracking-wider">
-                <span className="text-amber-500 mr-3">❖</span>
-                {selected.title}
-                <span className="text-amber-500 ml-3">❖</span>
-              </h2>
-              <MarkdownRenderer
-                content={content}
-                onLinkClick={(title) => {
-                  const match = articles.find((a) => a.title === title)
-                  if (match) setSelected(match)
-                  else alert(`Kein Artikel mit dem Titel „${title}" gefunden.`)
-                }}
-              />
-              <div className="text-center text-xs text-amber-200/40 font-serif italic mt-4">
-                Aus dem Kodex, Folio {selected.id}
-              </div>
-            </>
-          ) : null}
-        </div>
-      )}
+      <ArticleViewer
+        selected={selected}
+        articles={articles}
+        onSelectArticle={setSelected}
+      />
 
       <style jsx>{`
         .drop-zone.drop-active {
