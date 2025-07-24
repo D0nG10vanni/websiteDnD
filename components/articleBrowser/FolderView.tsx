@@ -133,9 +133,6 @@ export function FolderView({
         <div className="space-y-3">
           {directItems.length > 0 && (
             <div>
-              <div className="text-amber-400 text-sm font-serif mb-2 border-b border-amber-900/30 pb-1">
-                Artikel in {folder.name}
-              </div>
               <ArticleList
                 articles={directItems}
                 selectedId={selectedId}

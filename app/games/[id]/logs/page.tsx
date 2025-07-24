@@ -337,7 +337,7 @@ export default function CombinedPage() {
                   Timeline
                 </h2>
               </div>
-              <Timeline articles={articles} />
+              <Timeline gameId={gameId} />
             </div>
           </div>
 

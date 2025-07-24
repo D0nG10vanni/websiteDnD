@@ -1073,12 +1073,12 @@ export default function TimelineView({ gameId = 1, onSelect }: TimelineViewProps
             </div>
             
             {/* Dynamische Jahresmarkierungen */}
-            {timelineMetrics.yearMarkers.map((marker) => (
+            {timelineMetrics.yearMarkers.map((marker, index) => (
               <YearMarker 
-                key={marker.year} 
+                key={`${marker.year}-${marker.type}-${index}`}  // Unique key combining year, type, and index
                 marker={{
                   ...marker,
-                  top: eraHeight + periodHeight + 35 // Angepasste Position
+                  top: eraHeight + periodHeight + 35
                 }} 
               />
             ))}

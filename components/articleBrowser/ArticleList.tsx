@@ -2,6 +2,7 @@
 'use client'
 
 import { Post } from '@/lib/types'
+import { useState, useMemo } from 'react'
 
 interface ArticleListProps {
   articles: Post[]
@@ -24,9 +25,19 @@ export function ArticleList({
   onDragStart,
   onDragEnd
 }: ArticleListProps) {
+  const grouped = useMemo(() => {
+    const m: Record<string, Post[]> = {}
+    articles.forEach((a) => {
+      const key = a.title[0]?.toUpperCase() || '?'
+      m[key] = m[key] || []
+      m[key].push(a)
+    })
+    return m
+  }, [articles])
+
   const renderArticleItem = (article: Post) => {
     const isPending = pendingMoves.some(move => move.articleId === article.id)
-    
+
     return (
       <div 
         key={article.id} 
@@ -67,13 +78,22 @@ export function ArticleList({
   }
 
   return (
-    <div className="space-y-1">
-      {articles.slice(0, 15).map(renderArticleItem)}
-      {articles.length > 15 && (
-        <div className="text-amber-500/60 text-xs italic px-3 py-2">
-          ... und {articles.length - 15} weitere Artikel
+    <div className="space-y-2">
+      {Object.entries(grouped).sort().map(([letter, group]) => (
+        <div key={letter}>
+          <div className="text-amber-500/70 text-xs uppercase font-serif mb-1 pl-1">
+            {letter}
+          </div>
+          <div className="space-y-1">
+            {group.slice(0, 15).map(renderArticleItem)}
+            {group.length > 15 && (
+              <div className="text-amber-500/60 text-xs italic px-3 py-2">
+                ... und {group.length - 15} weitere Artikel
+              </div>
+            )}
+          </div>
         </div>
-      )}
+      ))}
     </div>
   )
 }
