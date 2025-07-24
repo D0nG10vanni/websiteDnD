@@ -1,4 +1,3 @@
-// SidebarFolderList.tsx
 'use client'
 
 import { Folder } from '@/lib/types'
@@ -24,7 +23,7 @@ export function SidebarFolderList({ folders, selectedFolderId, onSelectFolder }:
   const folderMap = folders.reduce((acc, f) => {
     acc[f.id] = { ...f, children: [] }
     return acc
-  }, {} as Record<number, Folder & { children: Folder[] }>)
+  }, {} as Record<number, Folder & { children: Folder[] }>);
 
   folders.forEach(f => {
     if (f.parent_id && folderMap[f.parent_id]) {
@@ -60,9 +59,9 @@ export function SidebarFolderList({ folders, selectedFolderId, onSelectFolder }:
   const rootFolders = folders.filter(f => f.parent_id == null)
 
   return (
-    <aside className="bg-black/30 w-64 p-4 border-r border-amber-900/30 overflow-y-auto">
+    <div className="bg-black/20 backdrop-blur-sm rounded-lg border border-amber-900/30 p-4 overflow-y-auto">
       <div className="text-amber-200 font-serif text-lg mb-4">📁 Ordner</div>
       {rootFolders.map(f => renderFolder(folderMap[f.id]))}
-    </aside>
+    </div>
   )
 }

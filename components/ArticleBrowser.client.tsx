@@ -7,6 +7,7 @@ import type { Post, Folder } from '@/lib/types'
 import Link from 'next/link'
 import { ArticleViewer } from './articleBrowser/ArticleViewer'
 import { FolderView } from './articleBrowser/FolderView'
+import { SidebarFolderList } from './articleBrowser/SidebarFolderList'
 
 interface Props {
   articles: Post[]
@@ -32,6 +33,7 @@ export default function ArticleBrowser({
   onUpdateArticle 
 }: Props) {
   const [folders, setFolders] = useState<Folder[]>([])
+  const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null)
   const [selected, setSelected] = useState<Post | null>(null)
   const [query, setQuery] = useState<string>('')
   const [deleteMode, setDeleteMode] = useState(false)
@@ -296,12 +298,18 @@ export default function ArticleBrowser({
       </div>
 
       {/* Tab-Navigation und Inhalt */}
-      <div className="bg-black/20 backdrop-blur-sm rounded-lg border border-amber-900/30 overflow-hidden">
-        {articlesLoading ? (
-          <div className="text-center py-12 text-amber-200/50 italic font-serif">
-            Die alten Schriften werden aus den Archiven geholt…
-          </div>
-        ) : (
+      <div className="flex gap-4">
+        {/* Sidebar-Folderliste */}
+        <div className="w-64 shrink-0">
+          <SidebarFolderList
+            folders={folders}
+            selectedFolderId={selectedFolderId}
+            onSelectFolder={setSelectedFolderId}
+          />
+        </div>
+
+        {/* FolderView bleibt rechts davon */}
+        <div className="flex-1">
           <FolderView
             folders={folders}
             articles={articles}
@@ -321,7 +329,7 @@ export default function ArticleBrowser({
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
           />
-        )}
+        </div>
       </div>
 
       {/* Ausgewählter Artikel */}
