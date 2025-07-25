@@ -311,7 +311,7 @@ export default function ArticleBrowser({
         {/* FolderView bleibt rechts davon */}
         <div className="flex-1">
           <FolderView
-            folders={folders}
+            folders={folders} 
             articles={articles}
             articlesByFolder={articlesByFolder}
             uncategorized={uncategorized}

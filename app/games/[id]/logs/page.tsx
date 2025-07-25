@@ -8,6 +8,7 @@ import Logs from '@/components/Logs.client';
 import MarkdownRenderer from '@/components/MarkdownRenderer';
 import GraphView from '@/components/graphview';
 import Timeline from '@/components/Timeline'; // Importiere die Timeline-Komponente
+import StoryBuilder from '@/components/storyGraph/story'; // Importiere die StoryBuilder-Komponente
 import type { Post } from '@/lib/types';
 
 export default function CombinedPage() {
@@ -20,7 +21,7 @@ export default function CombinedPage() {
   const [articles, setArticles] = useState<Post[]>([]);
   const [folders, setFolders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'articles' | 'logs' | 'graph' | 'timeline'>('logs');
+  const [activeTab, setActiveTab] = useState<'articles' | 'logs' | 'graph' | 'timeline' | 'story'>('logs');
   const [selectedArticleFromLogs, setSelectedArticleFromLogs] = useState<Post | null>(null);
   const [selectedArticleContent, setSelectedArticleContent] = useState<string | null>(null);
   const [isLoadingArticleContent, setIsLoadingArticleContent] = useState(false);
@@ -143,7 +144,7 @@ export default function CombinedPage() {
         <button
           className={`transition-all duration-300 hover:scale-110 ${
             activeTab === 'logs'
-              ? 'underline text-primary font-bold transform scale-105'
+              ? 'underline text-amber-400 font-bold transform scale-105'
               : 'text-gray-400 hover:text-gray-600'
           }`}
           onClick={() => setActiveTab('logs')}
@@ -153,7 +154,7 @@ export default function CombinedPage() {
         <button
           className={`transition-all duration-300 hover:scale-110 ${
             activeTab === 'articles'
-              ? 'underline text-accent font-bold transform scale-105'
+              ? 'underline text-amber-400 font-bold transform scale-105'
               : 'text-gray-400 hover:text-gray-600'
           }`}
           onClick={() => setActiveTab('articles')}
@@ -163,7 +164,7 @@ export default function CombinedPage() {
         <button
           className={`transition-all duration-300 hover:scale-110 ${
             activeTab === 'graph'
-              ? 'underline text-secondary font-bold transform scale-105'
+              ? 'underline text-amber-400 font-bold transform scale-105'
               : 'text-gray-400 hover:text-gray-600'
           }`}
           onClick={() => setActiveTab('graph')}
@@ -173,12 +174,22 @@ export default function CombinedPage() {
         <button
           className={`transition-all duration-300 hover:scale-110 ${
             activeTab === 'timeline'
-              ? 'underline text-info font-bold transform scale-105'
+              ? 'underline text-amber-400 font-bold transform scale-105'
               : 'text-gray-400 hover:text-gray-600'
           }`}
           onClick={() => setActiveTab('timeline')}
         >
           Timeline
+        </button>
+        <button
+          className={`transition-all duration-300 hover:scale-110 ${
+            activeTab === 'story'
+              ? 'underline text-amber-400 font-bold transform scale-105'
+              : 'text-gray-400 hover:text-gray-600'
+          }`}
+          onClick={() => setActiveTab('story')}
+        >
+          Story
         </button>
       </div>
 
@@ -298,13 +309,7 @@ export default function CombinedPage() {
                 : 'opacity-0 translate-x-8 scale-95 pointer-events-none absolute top-0 left-0'
             }`}
           >
-            <div className="w-full">
-              <div className="text-center mb-6">
-                <h2 className="text-2xl font-bold bg-gradient-to-r from-secondary to-info bg-clip-text text-transparent">
-                  Graphenansicht der Artikel
-                </h2>
-              </div>
-              
+            <div className="w-full">              
               {isLoading ? (
                 <div className="text-center py-12 text-amber-200/50 italic font-serif">
                   Die Verbindungen zwischen den Artikeln werden erkundet…
@@ -332,12 +337,22 @@ export default function CombinedPage() {
             }`}
           >
             <div className="w-full">
-              <div className="text-center mb-6">
-                <h2 className="text-2xl font-bold bg-gradient-to-r from-info to-accent bg-clip-text text-transparent">
-                  Timeline
-                </h2>
-              </div>
               <Timeline gameId={gameId} />
+            </div>
+          </div>
+
+
+          {/* Story Tab */}
+          <div
+            className={`w-full bg-base-100 p-6 rounded-lg shadow-md transition-all duration-700 ease-in-out transform ${
+              activeTab === 'story'
+                ? 'opacity-100 translate-x-0 scale-100'
+                : 'opacity-0 translate-x-8 scale-95 pointer-events-none absolute top-0 left-0'
+            }`}
+          >
+            <div className="w-full">
+              <StoryBuilder
+              />
             </div>
           </div>
 
