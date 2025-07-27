@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useSupabaseClient, useUser } from '@supabase/auth-helpers-react'
 import type { Post } from '@/lib/types'
+import type { Folder } from '@/lib/types'
 
 // Komponenten
 import ArticleHeader from '@/components/article/ArticleHeader'
@@ -29,13 +30,6 @@ export default function NeuerArtikelPage() {
   const [content, setContent] = useState('')
   const [previewContent, setPreviewContent] = useState('')
   const [folderId, setFolderId] = useState<number | null>(null)
-  // Define a Folder type or import it if available
-  type Folder = {
-    id: number
-    name: string
-    // add other folder fields as needed
-    [key: string]: any
-  }
   const [folders, setFolders] = useState<Folder[]>([])
   const [articles, setArticles] = useState<Post[]>([])
   const [isSaving, setIsSaving] = useState(false)
@@ -267,6 +261,7 @@ export default function NeuerArtikelPage() {
         {/* Metadaten-Container */}
         <div className="bg-black/40 backdrop-blur-sm rounded-lg border border-amber-900/40 p-5">
           <ArticleMetadata
+            gameId={gameId}
             title={title}
             setTitle={setTitle}
             folderId={folderId}

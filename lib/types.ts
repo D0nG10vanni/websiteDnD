@@ -23,6 +23,9 @@ export interface Folder {
   created_at: string | null
   name: string
   parent_id: number | null
+  game_id: number
+  creator_uuid: string
+  updated_at: string | null
 }
 
 export type User = { 

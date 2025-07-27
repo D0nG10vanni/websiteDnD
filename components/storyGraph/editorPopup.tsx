@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Node } from 'reactflow';
+import { supabase } from '@/lib/supabaseClient';
 
 export default function EditorPopup({
   node,
@@ -12,14 +13,26 @@ export default function EditorPopup({
 }) {
   const [label, setLabel] = useState(node.data.label || '');
   const [color, setColor] = useState(node.data.color || '#3b82f6');
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     setLabel(node.data.label || '');
     setColor(node.data.color || '#3b82f6');
   }, [node]);
 
-  const apply = () => {
-    onChange(node.id, { label, color });
+  const apply = async () => {
+    setLoading(true);
+    const { error } = await supabase.from('story').update({
+      label,
+      color,
+    }).eq('id', node.id);
+
+    if (!error) {
+      onChange(node.id, { label, color });
+    } else {
+      console.error('Fehler beim Speichern des Nodes:', error);
+    }
+    setLoading(false);
   };
 
   return (
@@ -55,9 +68,10 @@ export default function EditorPopup({
         <div className="flex justify-between border-t border-gray-700 pt-2">
           <button
             onClick={apply}
+            disabled={loading}
             className="text-xs text-blue-500 hover:text-blue-400 font-medium"
           >
-            Speichern
+            {loading ? '...' : 'Speichern'}
           </button>
           <button
             onClick={onClose}
