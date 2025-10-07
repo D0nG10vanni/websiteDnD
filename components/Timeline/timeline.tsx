@@ -1,8 +1,6 @@
 // Timeline.tsx - Refactored Haupt-Komponente (deutlich schlanker!)
 
 import React, { useMemo, useState, useCallback, useEffect } from 'react'
-import { Dialog } from '@headlessui/react'
-import { XMarkIcon } from '@heroicons/react/24/outline'
 import { generateLayoutMetrics } from './timelineUtils'
 
 // Global Auth Context (bereits vorhanden)
@@ -21,9 +19,7 @@ import {
   assignHorizontalLanes,
   calculateTimelineMetrics,
   calculateEntryPosition,
-  calculateMaxLanes,  
-  calculateTimelineHeight,
-  extractYearRange
+  calculateMaxLanes
 } from './timelineUtils'
 
 // Import UserGreeting from Header
@@ -72,26 +68,24 @@ export default function TimelineView({ gameId = 1, onSelect }: TimelineViewProps
   }, [gameId])
 
   // Verarbeitung der Timeline-Daten mit verbesserter Lane-Logik
-  const { 
-    erasEntries, 
-    periodEntries, 
-    eventEntries, 
-    eras, 
-    timeRange, 
-    maxEraLanes, 
-    maxPeriodLanes, 
-    maxEventLanes 
+  const {
+    erasEntries,
+    periodEntries,
+    eventEntries,
+    eras,
+    maxEraLanes,
+    maxPeriodLanes,
+    maxEventLanes
   } = useMemo(() => {
     if (timelineData.length === 0) {
-      return { 
-        erasEntries: [], 
-        periodEntries: [], 
-        eventEntries: [], 
-        eras: [], 
-        timeRange: { minYear: 0, maxYear: 0 }, 
-        maxEraLanes: 0, 
-        maxPeriodLanes: 0, 
-        maxEventLanes: 0 
+      return {
+        erasEntries: [],
+        periodEntries: [],
+        eventEntries: [],
+        eras: [],
+        maxEraLanes: 0,
+        maxPeriodLanes: 0,
+        maxEventLanes: 0
       }
     }
 
@@ -115,15 +109,13 @@ export default function TimelineView({ gameId = 1, onSelect }: TimelineViewProps
     )
     
     // Sammle Zeitraum und Era-Namen
-    const timeRange = extractYearRange(sorted)
     const eraNames = getUniqueEraNames(sorted.map(e => e.startYear))
 
-    return { 
+    return {
       erasEntries: erasWithLanes,
       periodEntries: periodsWithLanes,
       eventEntries: eventsWithLanes,
       eras: eraNames,
-      timeRange,
       maxEraLanes,
       maxPeriodLanes,
       maxEventLanes

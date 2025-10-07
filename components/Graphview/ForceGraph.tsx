@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { ZoomOut, RefreshCw } from 'lucide-react';
+import type { ForceGraphMethods, NodeObject, LinkObject } from 'react-force-graph-2d';
 
 // Typdefinitionen
 export interface RawNode {
@@ -50,27 +51,43 @@ export const NODE_COLORS: Record<string, string> = {
 };
 
 interface ForceGraphProps {
-  dataUrl: string;
+  dataUrl?: string;
+  graphData?: GraphData;
   height?: number;
-  width?: string;
+  width?: number | string;
   onNodeSelect?: (node: GraphNode | null) => void;
 }
 
 export default function ForceGraphComponent({
   dataUrl,
+  graphData,
   height = 600,
   width = '100%',
   onNodeSelect
 }: ForceGraphProps) {
   const [data, setData] = useState<GraphData>({ nodes: [], links: [] });
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(() => !graphData && !!dataUrl);
   const [error, setError] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   
-  const fgRef = useRef<any>(null);
+  const fgRef = useRef<ForceGraphMethods<GraphNode, GraphLink> | null>(null);
   
   // Daten laden
   useEffect(() => {
+    if (graphData) {
+      setData(graphData);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
+    if (!dataUrl) {
+      setData({ nodes: [], links: [] });
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
     setLoading(true);
     fetch(dataUrl, { cache: 'no-store' })
       .then(res => {
@@ -89,25 +106,25 @@ export default function ForceGraphComponent({
           y: n.y,
           color: n.type ? NODE_COLORS[n.type] || NODE_COLORS.default : NODE_COLORS.default
         }));
-        
+
         // Links erstellen und Duplikate entfernen
         const uniqueLinks = new Set<string>();
         const links: GraphLink[] = [];
-        
+
         rawData.forEach(n => {
           n.connections.forEach(target => {
             const linkId = n.id < target ? `${n.id}-${target}` : `${target}-${n.id}`;
             if (!uniqueLinks.has(linkId)) {
               uniqueLinks.add(linkId);
-              links.push({ 
-                source: n.id, 
+              links.push({
+                source: n.id,
                 target,
                 value: 1 // Kann für Kantengewichtung genutzt werden
               });
             }
           });
         });
-        
+
         setData({ nodes, links });
         setLoading(false);
       })
@@ -116,7 +133,7 @@ export default function ForceGraphComponent({
         setError(err.message);
         setLoading(false);
       });
-  }, [dataUrl]);
+  }, [dataUrl, graphData]);
 
   // Graph zentrieren und passen
   const handleFitView = useCallback(() => {
@@ -146,10 +163,10 @@ export default function ForceGraphComponent({
   }, [handleFitView, onNodeSelect]);
 
   // Knoten-Klick-Handler
-  const handleNodeClick = useCallback((node: any, event: MouseEvent) => {
+  const handleNodeClick = useCallback((node: NodeObject<GraphNode>) => {
       const graphNode = node as GraphNode;
       setSelectedNode(graphNode);
-      
+
       if (onNodeSelect) {
         onNodeSelect(graphNode);
       }
@@ -162,7 +179,7 @@ export default function ForceGraphComponent({
     }, [onNodeSelect]);
   
   // Custom Node-Rendering
-  const nodeCanvasObject = useCallback((node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
+  const nodeCanvasObject = useCallback((node: NodeObject<GraphNode>, ctx: CanvasRenderingContext2D, globalScale: number) => {
     const { x, y, id, color, name } = node;
     if (x === undefined || y === undefined) return;
     
@@ -210,12 +227,12 @@ export default function ForceGraphComponent({
   }, [selectedNode]);
 
   // Link-Styling
-  const linkColor = useCallback((link: any) => {
+  const linkColor = useCallback((link: LinkObject<GraphNode, GraphLink>) => {
     // Verbindungen des ausgewählten Knotens hervorheben
-    if (selectedNode && 
-       ((typeof link.source === 'object' && link.source.id === selectedNode.id) || 
+    if (selectedNode &&
+       ((typeof link.source === 'object' && link.source.id === selectedNode.id) ||
         (typeof link.target === 'object' && link.target.id === selectedNode.id) ||
-        link.source === selectedNode.id || 
+        link.source === selectedNode.id ||
         link.target === selectedNode.id)) {
       return 'rgba(255, 100, 100, 0.8)';
     }
