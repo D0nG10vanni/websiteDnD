@@ -33,7 +33,7 @@ export default function EditorPopup({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <div 
         className="rounded-xl border border-gray-700 shadow-xl bg-base-100 text-sm"
         onKeyDown={handleKeyDown}
