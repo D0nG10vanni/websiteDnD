@@ -97,6 +97,7 @@ export type TimeSpanProps = {
     top: number
     height: number
   }
+  mainLineTop?: number
 }
 
 export type PointEventProps = {

@@ -390,13 +390,14 @@ export default function TimelineView({ gameId = 1, onSelect }: TimelineViewProps
               )
               return (
                 <TimeSpan
-                  key={`era-${entry.id}-${entry.lane}`}
+                  key={`period-${entry.id}-${entry.lane}`}
                   entry={entry}
                   startPercent={startPercent}
                   widthPercent={widthPercent}
                   lane={entry.lane}
                   onClick={() => handleEntryClick(entry)}
-                  layoutSection={layoutMetrics.eraSection}
+                  layoutSection={layoutMetrics.periodSection}
+                  mainLineTop={layoutMetrics.mainLine.top}
                 />
               )
             })}

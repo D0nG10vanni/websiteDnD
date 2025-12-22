@@ -2,8 +2,6 @@
 
 import type { TimelineEntry, TimelineMetrics, YearMarker } from './types'
 
-// timelineUtils.ts
-
 export interface LayoutSection {
   top: number
   height: number
@@ -23,25 +21,34 @@ export function generateLayoutMetrics(
   maxEventLanes: number
 ): LayoutMetrics {
   const spacing = {
-    era: 45,
-    period: 35,
-    event: 30,
-    gap: 30,
-    topOffset: 40,
-    mainLine: 240,
+    era: 45,          // Höhe pro Ära-Lane
+    period: 35,       // Höhe pro Perioden-Lane
+    event: 100,       // Höhe pro Event-Lane (unterhalb der Linie)
+    gap: 40,          // Abstand zwischen den Sektionen
+    topOffset: 60,    // Platz ganz oben für Legende/Header
+    // mainLine: 240  <-- GELÖSCHT: Kein fester Wert mehr!
   }
 
-  const eraHeight = maxEraLanes * spacing.era
+  // 1. Ära Sektion (Oben)
+  const eraHeight = Math.max(maxEraLanes, 1) * spacing.era
+  
+  // 2. Perioden Sektion (Mitte)
   const periodTop = spacing.topOffset + eraHeight + spacing.gap
-  const periodHeight = maxPeriodLanes * spacing.period
-  const eventTop = periodTop + periodHeight + spacing.gap
-  const eventHeight = maxEventLanes * spacing.event
+  const periodHeight = Math.max(maxPeriodLanes, 1) * spacing.period
+  
+  // 3. Hauptlinie (Dynamisch berechnet!)
+  // Sie liegt unterhalb der Perioden + einem kleinen Puffer
+  const mainLineTop = periodTop + periodHeight + 50 
 
-  const totalHeight = eventTop + eventHeight + spacing.topOffset
+  // 4. Event Sektion (Unten)
+  const eventTop = mainLineTop + 40 // Events starten unter der Linie
+  const eventHeight = Math.max(maxEventLanes, 1) * spacing.event
+
+  const totalHeight = eventTop + eventHeight + 50
 
   return {
     totalHeight,
-    mainLine: { top: spacing.mainLine },
+    mainLine: { top: mainLineTop },
     eraSection: {
       top: spacing.topOffset,
       height: eraHeight,
@@ -56,7 +63,6 @@ export function generateLayoutMetrics(
     },
   }
 }
-
 
 /**
  * Weist Timeline-Einträgen horizontale Lanes zu, um Überlappungen zu vermeiden
