@@ -11,6 +11,9 @@ export type Character = {
   level: number
   stats: any
   game_id: string
+  games?: {
+    name: string
+  }
   player_id: number // KORRIGIERT: Ist in der DB ein int8 (Zahl), keine UUID
   created_at: string
   updated_at: string
@@ -51,13 +54,12 @@ export class CharacterService {
    * Lädt alle Charaktere eines Users
    */
   static async getUserCharacters(userId: string): Promise<Character[]> {
-    // 1. UUID in Zahl umwandeln
     const playerId = await this.resolvePlayerId(userId)
 
-    // 2. Mit der Zahl abfragen
     const { data, error } = await supabase
       .from('characters')
-      .select('*')
+      // WICHTIG: Wir holen alles (*) UND den Namen aus der Tabelle 'games'
+      .select('*, games (name)') 
       .eq('player_id', playerId)
       .order('created_at', { ascending: false })
 
@@ -65,7 +67,9 @@ export class CharacterService {
       throw new Error(`Fehler beim Laden der Charaktere: ${error.message}`)
     }
 
-    return data || []
+    // Supabase gibt manchmal Arrays zurück, Typ-Sicherheit herstellen:
+    // Wir casten das Ergebnis, damit TypeScript weiß, dass 'games' da ist.
+    return (data as unknown as Character[]) || []
   }
 
   /**
