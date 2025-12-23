@@ -36,7 +36,7 @@ export default function EditorPopup({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
       <div 
         className="rounded-xl border border-gray-700 shadow-xl bg-base-100 text-sm"
-        onKeyDown={handleKeyDown}
+        onKeyDown={handleKeyDown} 
         tabIndex={-1}
       >
         <div className="p-4 w-64">

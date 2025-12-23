@@ -352,6 +352,7 @@ export default function CombinedPage() {
           >
             <div className="w-full">
               <StoryBuilder
+              gameId={gameId}
               />
             </div>
           </div>
