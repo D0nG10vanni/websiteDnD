@@ -1,11 +1,25 @@
-// lib/supabaseAdmin.ts
-import { createClient, SupabaseClient } from '@supabase/supabase-js'
+import { createClient } from '@supabase/supabase-js'
 
-// Diese Env-Variablen musst du setzen: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
-const supabaseUrl: string = process.env.SUPABASE_URL!
-const supabaseServiceKey: string = process.env.SUPABASE_SERVICE_ROLE_KEY!
+// 1. Variablen laden
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY // Achte auf den Namen!
 
-export const supabaseAdmin: SupabaseClient = createClient(
+// 2. Sicherheitscheck (hilft beim Debuggen)
+if (!supabaseUrl) {
+  throw new Error('❌ FEHLER: NEXT_PUBLIC_SUPABASE_URL fehlt in .env.local')
+}
+if (!supabaseServiceKey) {
+  throw new Error('❌ FEHLER: SUPABASE_SERVICE_ROLE_KEY fehlt in .env.local')
+}
+
+// 3. Client erstellen
+export const supabaseAdmin = createClient(
   supabaseUrl,
-  supabaseServiceKey
+  supabaseServiceKey,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  }
 )
