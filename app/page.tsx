@@ -130,34 +130,16 @@ return (
             <div className="absolute -inset-6 bg-gradient-to-r from-orange-400/40 to-red-400/40 rounded-xl blur-xl opacity-60 group-hover:opacity-100 transition-all duration-500"></div>
             <div className="absolute -inset-4 border-2 border-orange-500/40 rounded-xl opacity-0 group-hover:opacity-100 transition-all duration-300 animate-pulse"></div>
 
-            <div className="relative transform-gpu transition-all duration-500 group-hover:scale-105 group-hover:rotate-1 overflow-hidden rounded-xl">
-              {/* Pixel Transition Overlay */}
-              <div className="absolute inset-0 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-1000">
-                {Array.from({ length: 200 }).map((_, i) => {
-                  const row = Math.floor(i / 20);
-                  const col = i % 20;
-                  return (
-                    <div
-                      key={i}
-                      className="absolute bg-orange-500/30 pixel-reveal"
-                      style={{
-                        width: '5%',
-                        height: '5%',
-                        left: `${col * 5}%`,
-                        top: `${row * 10}%`,
-                        animationDelay: `${Math.random() * 2}s`,
-                        animationDuration: '0.8s'
-                      }}
-                    />
-                  );
-                })}
-              </div>
+            <div className="relative transform-gpu transition-all duration-500 group-hover:scale-105 group-hover:rotate-1 overflow-hidden rounded-xl h-[450px]">
               
-              <iframe
-                src="https://tenor.com/embed/18135104"
-                className="w-full h-[450px] rounded-xl shadow-2xl transition-all duration-500 group-hover:shadow-orange-500/20"
-                allowFullScreen
-              ></iframe>
+              <img 
+                src="/assets/giphy.gif" 
+                alt="Bilbo Baggins running" 
+                className="w-full h-full object-cover rounded-xl shadow-2xl transition-all duration-500 group-hover:shadow-orange-500/20"
+                style={{
+                  objectPosition: 'center',
+                }}
+              />
               
               <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
             </div>
