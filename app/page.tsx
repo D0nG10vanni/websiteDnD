@@ -194,7 +194,7 @@ return (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
           
           {/* Network Card */}
-          <Link href="/graphview" className="group">
+          <Link href="/auth/UserHomepage" className="group">
             <div className="card bg-gradient-to-br from-base-100 to-base-100/80 shadow-xl border border-primary/30 hover:border-orange-500/60 transition-all duration-500 hover:scale-105 hover:shadow-2xl hover:shadow-orange-500/20 cursor-pointer h-full transform-gpu">
               <div className="card-body text-center p-6 relative overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
