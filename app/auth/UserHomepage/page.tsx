@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/AuthContext'
 import { useUserCharacters, type Character } from '@/lib/characterService'
 import StatBlockEditor from '@/components/StatBlockEditor'
 
-// Hilfskomponente für Attribute
+// Hilfskomponente für Attribute (kleine Boxen)
 const StatBox = ({ label, value }: { label: string; value: any }) => (
   <div className="bg-slate-900/50 border border-slate-700 p-2 rounded flex flex-col items-center justify-center min-w-[3rem]">
     <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">{label.slice(0, 3)}</span>
@@ -16,7 +16,23 @@ const StatBox = ({ label, value }: { label: string; value: any }) => (
 export default function UserHomepage() {
   const { user } = useAuth()
   const { characters, loading, error, refetch } = useUserCharacters(user?.id)
+  
+  // State für das Modal
   const [showModal, setShowModal] = useState(false)
+  // State für den Charakter, der gerade bearbeitet wird (null = neuer Charakter)
+  const [editingCharacter, setEditingCharacter] = useState<Character | null>(null)
+
+  // Handler: Öffnet Modal für neuen Charakter
+  const handleCreateClick = () => {
+    setEditingCharacter(null) // Reset, damit Formular leer ist
+    setShowModal(true)
+  }
+
+  // Handler: Öffnet Modal zum Bearbeiten
+  const handleEditClick = (char: Character) => {
+    setEditingCharacter(char) // Charakterdaten laden
+    setShowModal(true)
+  }
 
   // Status Badge mit Fantasy-Touch
   const getStatusBadge = (character: Character) => {
@@ -37,21 +53,22 @@ export default function UserHomepage() {
   // Character Card Component
   const CharacterCard = ({ character }: { character: Character }) => (
     <div className="group relative bg-slate-800 border border-slate-700 rounded-xl p-5 shadow-xl transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl hover:border-amber-500/50 overflow-hidden flex flex-col h-full">
-      {/* Dekorativer Glow Effekt */}
+      {/* Dekorativer Glow Effekt im Hintergrund */}
       <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none group-hover:bg-amber-500/10 transition-colors" />
 
       <div className="relative z-10 flex flex-col h-full">
         
-        {/* NEU: Spiel / Kampagne Badge */}
+        {/* Header: Spiel-Name & Status */}
         <div className="flex justify-between items-start mb-2">
-          <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-slate-900/80 border border-slate-700 text-[10px] uppercase tracking-widest text-amber-500/80 font-bold mb-1">
+          {/* Game Badge */}
+          <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-slate-900/80 border border-slate-700 text-[10px] uppercase tracking-widest text-amber-500/80 font-bold mb-1" title={character.games?.name ? `Teil der Kampagne: ${character.games.name}` : 'Keinem Spiel zugewiesen'}>
             <span>🎲</span>
-            {/* Hier greifen wir auf den geladenen Namen zu */}
-            <span>{character.games?.name || 'Heimatlos'}</span>
+            <span className="truncate max-w-[120px]">{character.games?.name || 'Heimatlos'}</span>
           </div>
           {getStatusBadge(character)}
         </div>
 
+        {/* Charakter Infos */}
         <div className="mb-4">
           <h3 className="font-serif text-xl font-bold text-amber-50 group-hover:text-amber-400 transition-colors truncate">
             {character.name}
@@ -71,7 +88,7 @@ export default function UserHomepage() {
           </div>
         )}
 
-        {/* Stats Preview - Schiebt den Rest nach unten (flex-grow) */}
+        {/* Stats Preview - Nimmt verfügbaren Platz ein */}
         <div className="flex-grow">
           {character.stats && typeof character.stats === 'object' && (
             <div className="mb-5">
@@ -85,13 +102,16 @@ export default function UserHomepage() {
         </div>
 
         {/* Footer Info & Buttons */}
-        <div className="mt-auto">
-          <div className="flex justify-between items-center text-[10px] text-slate-500 uppercase tracking-widest mb-4 border-t border-slate-700/50 pt-2">
+        <div className="mt-auto pt-4 border-t border-slate-700/50">
+          <div className="flex justify-between items-center text-[10px] text-slate-500 uppercase tracking-widest mb-3">
             <span>Erstellt: {new Date(character.created_at).toLocaleDateString('de-DE')}</span>
           </div>
 
           <div className="flex gap-3">
-            <button className="flex-1 bg-amber-600 hover:bg-amber-500 text-slate-900 font-bold px-3 py-2 rounded text-sm transition-all shadow-lg hover:shadow-amber-500/20 active:scale-95">
+            <button 
+              onClick={() => handleEditClick(character)}
+              className="flex-1 bg-amber-600 hover:bg-amber-500 text-slate-900 font-bold px-3 py-2 rounded text-sm transition-all shadow-lg hover:shadow-amber-500/20 active:scale-95"
+            >
               Bearbeiten
             </button>
             <button className="flex-1 bg-slate-700 hover:bg-slate-600 text-slate-200 px-3 py-2 rounded text-sm transition-colors border border-slate-600 hover:border-slate-500">
@@ -118,7 +138,7 @@ export default function UserHomepage() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 font-sans selection:bg-amber-500/30">
-      {/* Background Texture Overlay (Optional, für mehr Tiefe) */}
+      {/* Background Texture Overlay */}
       <div className="fixed inset-0 bg-[url('https://www.transparenttextures.com/patterns/dark-leather.png')] opacity-50 pointer-events-none" />
 
       <div className="relative p-6 max-w-7xl mx-auto z-10">
@@ -137,7 +157,7 @@ export default function UserHomepage() {
             </div>
             
             <button
-              onClick={() => setShowModal(true)}
+              onClick={handleCreateClick}
               className="bg-gradient-to-r from-blue-700 to-indigo-800 hover:from-blue-600 hover:to-indigo-700 text-white px-6 py-3 rounded-lg shadow-[0_0_15px_rgba(59,130,246,0.3)] border border-blue-500/30 font-bold transition-all hover:scale-105 flex items-center gap-2 group"
             >
               <span className="text-xl group-hover:rotate-90 transition-transform duration-300">⚔️</span>
@@ -146,26 +166,26 @@ export default function UserHomepage() {
           </div>
         </div>
 
-        {/* Character Modal in UserHomepage */}
+        {/* Modal Overlay */}
         {showModal && (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-            <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto relative">
+            <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto relative ring-1 ring-white/10">
               <button
                 className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors"
                 onClick={() => setShowModal(false)}
               >
-                ✖
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
               </button>
               
               <h2 className="text-2xl font-serif text-amber-50 mb-6 border-b border-slate-800 pb-2">
-                Neuen Charakter schmieden
+                {editingCharacter ? `Charakter bearbeiten: ${editingCharacter.name}` : 'Neuen Charakter schmieden'}
               </h2>
               
-              {/* HIER ÜBERGIBST DU JETZT DIE FUNKTIONEN */}
               <StatBlockEditor 
+                initialCharacter={editingCharacter}
                 onSuccess={() => {
-                  setShowModal(false); // Modal schließen
-                  refetch(); // Liste neu laden!
+                  setShowModal(false)
+                  refetch() // Liste neu laden
                 }}
                 onCancel={() => setShowModal(false)}
               />
@@ -213,7 +233,7 @@ export default function UserHomepage() {
                 Noch hat kein Held seinen Fuß in diese Welt gesetzt. Es ist an der Zeit, eine Legende zu beginnen.
               </p>
               <button
-                onClick={() => setShowModal(true)}
+                onClick={handleCreateClick}
                 className="text-amber-400 hover:text-amber-300 font-bold border-b-2 border-amber-500/30 hover:border-amber-500 transition-all pb-1"
               >
                 Erschaffe den Ersten &rarr;

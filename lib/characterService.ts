@@ -10,7 +10,7 @@ export type Character = {
   background: string
   level: number
   stats: any
-  game_id: string
+  game_id?: number | null
   games?: {
     name: string
   }
@@ -98,31 +98,50 @@ export class CharacterService {
   /**
    * Erstellt einen neuen Charakter
    */
+  /**
+   * Lädt alle Spiele, in denen der User (via player_id) Mitglied ist.
+   * Nutzt die Verknüpfungstabelle 'game_players'.
+   */
+  static async getUserGames(userId: string): Promise<{ id: number; name: string }[]> {
+    const playerId = await this.resolvePlayerId(userId)
+
+    // Wir fragen die Verknüpfungstabelle ab und holen die Game-Details dazu
+    const { data, error } = await supabase
+      .from('game_players')
+      .select('game_id, games (id, name)')
+      .eq('player_id', playerId)
+
+    if (error) {
+      console.error('Fehler beim Laden der Spiele:', error)
+      return []
+    }
+
+    // Daten flachklopfen: Wir wollen nur eine Liste von {id, name}
+    return data.map((entry: any) => ({
+      id: entry.games.id,
+      name: entry.games.name
+    }))
+  }
+
+  // Update der createCharacter Methode, um game_id zu akzeptieren
   static async createCharacter(characterData: CreateCharacterData, userId: string): Promise<Character> {
     const playerId = await this.resolvePlayerId(userId)
 
     const newCharacter = {
       ...characterData,
-      player_id: playerId, // Hier speichern wir die Zahl
-      level: characterData.level || 1,
-      alive: characterData.alive !== undefined ? characterData.alive : true,
-      stats: characterData.stats || {},
+      player_id: playerId,
+      game_id: characterData.game_id || null, // Hier wichtig: Game ID speichern
+      // ... Rest wie vorher
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     }
-
-    const { data, error } = await supabase
-      .from('characters')
-      .insert([newCharacter])
-      .select()
-      .single()
-
-    if (error) {
-      throw new Error(`Fehler beim Erstellen des Charakters: ${error.message}`)
-    }
-
+    // ... Insert Logik ...
+    const { data, error } = await supabase.from('characters').insert([newCharacter]).select().single()
+    if (error) throw new Error(error.message)
     return data
   }
+
+  // Update Methode bleibt weitgehend gleich, da sie Partial<Data> nimmt
 
   /**
    * Aktualisiert einen Charakter
