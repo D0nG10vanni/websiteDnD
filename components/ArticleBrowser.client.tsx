@@ -6,8 +6,8 @@ import { supabase } from '@/lib/supabaseClient'
 import type { Post, Folder } from '@/lib/types'
 import Link from 'next/link'
 import { ArticleViewer } from './articleBrowser/ArticleViewer'
-import { FolderView } from './articleBrowser/FolderView'
-import { SidebarFolderList } from './articleBrowser/SidebarFolderList'
+import { FolderTree } from './articleBrowser/FolderTree' // Neu
+import { ArticleList } from './articleBrowser/ArticleList' // Neu
 
 interface Props {
   articles: Post[]
@@ -18,30 +18,23 @@ interface Props {
   onUpdateArticle: (article: Post) => void
 }
 
-interface PendingMove {
-  articleId: number
-  oldFolderId: number | null
-  newFolderId: number | null
-}
-
 export default function ArticleBrowser({ 
   articles, 
   gameId, 
-  isLoading: articlesLoading,
+  isLoading: propsLoading, // Umbenannt um Konflikt zu vermeiden
   onDeleteArticle,
   onAddArticle,
   onUpdateArticle 
 }: Props) {
+  // --- State ---
   const [folders, setFolders] = useState<Folder[]>([])
-  const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null)
-  const [selected, setSelected] = useState<Post | null>(null)
-  const [query, setQuery] = useState<string>('')
-  const [deleteMode, setDeleteMode] = useState(false)
-  const [collapsedFolders, setCollapsedFolders] = useState<Set<number>>(new Set())
-  const [pendingMoves, setPendingMoves] = useState<PendingMove[]>([])
-  const [isSaving, setIsSaving] = useState(false)
-  const [draggedArticle, setDraggedArticle] = useState<Post | null>(null)
+  const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null) // null = Alle/Unkategorisiert Logik
+  const [selectedArticle, setSelectedArticle] = useState<Post | null>(null)
+  const [searchQuery, setSearchQuery] = useState<string>('')
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true)
+  const [isMoving, setIsMoving] = useState(false) // Für Ladeindikator beim Verschieben
 
+  // --- Initial Data Loading ---
   useEffect(() => {
     if (!gameId) return
     ;(async () => {
@@ -49,300 +42,209 @@ export default function ArticleBrowser({
         .from('folders')
         .select('*')
         .eq('game_id', gameId)
+        .order('name')
+      
       if (error) console.error('Fehler beim Laden der Ordner:', error)
       else setFolders(data || [])
     })()
   }, [gameId])
 
-  const handleDelete = async (id: number) => {
-    const success = await onDeleteArticle(id);
-    if (success && selected?.id === id) {
-      setSelected(null);
+  // --- Filter Logic ---
+  const filteredArticles = useMemo(() => {
+    let result = articles || []
+
+    // 1. Suche hat Priorität
+    if (searchQuery.trim().length > 0) {
+      const q = searchQuery.toLowerCase()
+      return result.filter(a => 
+        a.title.toLowerCase().includes(q) || 
+        a.content.toLowerCase().includes(q)
+      ).sort((a, b) => a.title.localeCompare(b.title))
     }
-  }
 
-  const toggleFolder = (folderId: number) => {
-    setCollapsedFolders(prev => {
-      const newSet = new Set(prev)
-      if (newSet.has(folderId)) {
-        newSet.delete(folderId)
-      } else {
-        newSet.add(folderId)
-      }
-      return newSet
-    })
-  }
-
-  const handleDragStart = (e: React.DragEvent, article: Post) => {
-    setDraggedArticle(article)
-    e.dataTransfer.effectAllowed = 'move'
-    e.dataTransfer.setData('text/plain', article.id.toString())
-    
-    if (e.currentTarget instanceof HTMLElement) {
-      e.currentTarget.style.opacity = '0.5'
-    }
-  }
-
-  const handleDragEnd = (e: React.DragEvent) => {
-    setDraggedArticle(null)
-    if (e.currentTarget instanceof HTMLElement) {
-      e.currentTarget.style.opacity = '1'
-    }
-  }
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-  }
-
-  const handleDrop = (e: React.DragEvent, targetFolderId: number | null) => {
-    e.preventDefault()
-    
-    if (!draggedArticle) return
-    
-    const currentFolderId = draggedArticle.folder_id
-    
-    if (currentFolderId === targetFolderId) return
-    
-    const existingMoveIndex = pendingMoves.findIndex(move => move.articleId === draggedArticle.id)
-    
-    if (existingMoveIndex >= 0) {
-      setPendingMoves(prev => {
-        const newMoves = [...prev]
-        newMoves[existingMoveIndex].newFolderId = targetFolderId
-        return newMoves
-      })
+    // 2. Wenn keine Suche, filtere nach Ordner
+    if (selectedFolderId === null) {
+      // Option A: Zeige NUR Unkategorisierte, wenn kein Ordner gewählt? 
+      // Option B: Zeige ALLE, wenn nichts gewählt?
+      // Hier: Wir nutzen "Unkategorisiert" als expliziten Filter.
+      // Wenn du einen "Alle Artikel" Button willst, bräuchte man eine separate ID (-1 o.ä.)
+      return result.filter(a => !a.folder_id).sort((a, b) => a.title.localeCompare(b.title))
     } else {
-      setPendingMoves(prev => [...prev, {
-        articleId: draggedArticle.id,
-        oldFolderId: currentFolderId,
-        newFolderId: targetFolderId
-      }])
+      return result.filter(a => a.folder_id === selectedFolderId).sort((a, b) => a.title.localeCompare(b.title))
     }
+  }, [articles, searchQuery, selectedFolderId])
 
-    const dropZones = document.querySelectorAll('.drop-zone')
-    dropZones.forEach(zone => zone.classList.remove('drop-active'))
+  // --- Actions ---
+
+  const handleFolderSelect = (id: number | null) => {
+    setSelectedFolderId(id)
+    setSearchQuery('') // Suche leeren für Fokus
+    setSelectedArticle(null)
   }
 
-  const handleDragEnter = (e: React.DragEvent) => {
-    e.preventDefault()
-    if (e.currentTarget instanceof HTMLElement) {
-      e.currentTarget.classList.add('drop-active')
-    }
+  const handleArticleSelect = (article: Post) => {
+    setSelectedArticle(article)
   }
 
-  const handleDragLeave = (e: React.DragEvent) => {
-    if (e.currentTarget instanceof HTMLElement && !e.currentTarget.contains(e.relatedTarget as Node)) {
-      e.currentTarget.classList.remove('drop-active')
-    }
-  }
-
-  const savePendingChanges = async () => {
-    if (pendingMoves.length === 0) return
+  const handleDelete = async (id: number) => {
+    if(!confirm("Diesen Artikel wirklich ins Nichts verbannen?")) return;
     
-    setIsSaving(true)
+    const success = await onDeleteArticle(id)
+    if (success && selectedArticle?.id === id) {
+      setSelectedArticle(null)
+    }
+  }
+
+  // Snappy Drag & Drop: Sofortiges Speichern
+  const handleMoveArticle = async (articleId: number, targetFolderId: number | null) => {
+    if (isMoving) return;
+
+    // 1. Optimistisches Update im Parent State (damit es sich sofort anfühlt)
+    const article = articles.find(a => a.id === articleId)
+    if (!article || article.folder_id === targetFolderId) return
+
+    // Update lokal
+    const updatedArticle = { ...article, folder_id: targetFolderId || 0 } // 0 oder null je nach DB Schema
+    onUpdateArticle(updatedArticle) // UI Update sofort
+    
+    setIsMoving(true)
     try {
-      for (const move of pendingMoves) {
-        const { error } = await supabase
-          .from('posts')
-          .update({ folder_id: move.newFolderId })
-          .eq('id', move.articleId)
-        
-        if (error) {
-          console.error('Fehler beim Verschieben des Artikels:', error)
-          throw error
-        }
-      }
-      
-      pendingMoves.forEach(move => {
-        const article = articles.find(a => a.id === move.articleId)
-        if (article) {
-          article.folder_id = move.newFolderId ?? 0
-          onUpdateArticle(article)
-        }
-      })
-      
-      setPendingMoves([])
-      
-    } catch (error) {
-      console.error('Fehler beim Speichern der Änderungen:', error)
-      alert('Fehler beim Speichern der Änderungen. Bitte versuche es erneut.')
+      // 2. DB Update
+      const { error } = await supabase
+        .from('posts')
+        .update({ folder_id: targetFolderId })
+        .eq('id', articleId)
+
+      if (error) throw error
+    } catch (err) {
+      console.error("Fehler beim Verschieben:", err)
+      alert("Der Zauber ist fehlgeschlagen (Move failed).")
+      // Revert logic wäre hier gut, aber keep it simple for now
     } finally {
-      setIsSaving(false)
+      setIsMoving(false)
     }
   }
-
-  const discardPendingChanges = () => {
-    setPendingMoves([])
-  }
-
-  const getEffectiveFolderId = (article: Post): number | null => {
-    const pendingMove = pendingMoves.find(move => move.articleId === article.id)
-    return pendingMove ? pendingMove.newFolderId : article.folder_id
-  }
-
-  const filtered = useMemo(
-    () =>
-      (articles ?? []).filter((a) =>
-        [a.title, a.content]
-          .join(' ')
-          .toLowerCase()
-          .includes(query.toLowerCase())
-      ),
-    [articles, query]
-  )
-
-  useEffect(() => {
-    if (selected && !articles.find(a => a.id === selected.id)) {
-      setSelected(null);
-    }
-  }, [articles, selected]);
-
-  const articlesByFolder = useMemo(() => {
-    const m: Record<number, Post[]> = {}
-    filtered.forEach((a) => {
-      const effectiveFolderId = getEffectiveFolderId(a)
-      const id = effectiveFolderId ? Number(effectiveFolderId) : 0
-      if (!isNaN(id)) {
-        m[id] = m[id] || []
-        m[id].push(a)
-      }
-    })
-    return m
-  }, [filtered, pendingMoves])
-
-  const uncategorized = filtered.filter((a) => !getEffectiveFolderId(a))
 
   return (
-    <div className="space-y-6">
-      {/* Header mit Suche und Kontrollen */}
-      <div className="bg-black/40 backdrop-blur-sm rounded-lg border border-amber-900/40 p-5">
-        <h2 className="font-serif text-center text-xl text-amber-200 mb-4">
-          <span className="text-amber-500">❖</span> ENCYCLOPAEDIA <span className="text-amber-500">❖</span>
-        </h2>
+    <div className="flex flex-col h-[85vh] bg-black/40 backdrop-blur-md border border-amber-900/40 rounded-xl overflow-hidden shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+      
+      {/* --- HEADER --- */}
+      <div className="flex items-center justify-between px-4 py-3 bg-black/40 border-b border-amber-900/40 shrink-0">
+        <div className="flex items-center gap-4">
+          <h2 className="font-serif text-amber-200 tracking-widest text-lg">
+            <span className="text-amber-600 mr-2">❖</span>
+            ARCHIV
+          </h2>
+          {/* Action Buttons Compact */}
+          <div className="flex gap-2 ml-4">
+            <Link href={`/games/${gameId}/ArticleView/WriteArticle`} className="btn-icon" title="Neuer Artikel">
+               ✎
+            </Link>
+            <Link href={`/games/${gameId}/ArticleView/NeuerArtikel`} className="btn-icon" title="Upload">
+               ⬆
+            </Link>
+            <Link href={`/games/${gameId}/ArticleView/Ordnerstruktur`} className="btn-icon" title="Ordner verwalten">
+               📁
+            </Link>
+          </div>
+        </div>
 
-        <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-          <input
+        {/* Suche */}
+        <div className="relative w-64">
+           <input
             type="text"
-            placeholder="Durchsuche die alten Texte…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="flex-1 bg-black/50 border border-amber-900/50 rounded-sm px-3 py-2 text-amber-100 placeholder-amber-200/30 font-serif text-sm focus:outline-none focus:ring-1 focus:ring-amber-700/50"
+            placeholder="Suche in den Schriften..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-black/60 border border-amber-900/40 rounded px-3 py-1.5 text-sm text-amber-100 placeholder-amber-700/50 focus:outline-none focus:border-amber-500 font-serif"
           />
+          {searchQuery && (
+             <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1.5 text-amber-700 hover:text-amber-500">✕</button>
+          )}
+        </div>
+      </div>
 
-          <div className="flex items-center gap-4">
-            {/* Speicher-Kontrollen */}
-            {pendingMoves.length > 0 && (
-              <div className="flex items-center gap-2 px-3 py-2 bg-amber-900/20 border border-amber-600/50 rounded-sm">
-                <span className="text-amber-200 text-xs font-serif">
-                  {pendingMoves.length} Änderung{pendingMoves.length !== 1 ? 'en' : ''}
-                </span>
-                <button
-                  onClick={savePendingChanges}
-                  disabled={isSaving}
-                  className="px-2 py-1 bg-green-700 hover:bg-green-600 text-white text-xs rounded transition-colors disabled:opacity-50"
-                >
-                  {isSaving ? '...' : '✓ Speichern'}
-                </button>
-                <button
-                  onClick={discardPendingChanges}
-                  className="px-2 py-1 bg-red-700 hover:bg-red-600 text-white text-xs rounded transition-colors"
-                >
-                  ✕ Verwerfen
-                </button>
-              </div>
+      {/* --- MAIN CONTENT (3 PANES) --- */}
+      <div className="flex flex-1 overflow-hidden">
+        
+        {/* PANE 1: Folder Tree */}
+        <div className={`${isSidebarOpen ? 'w-64' : 'w-0'} transition-all duration-300 border-r border-amber-900/30 flex flex-col bg-black/20 overflow-hidden`}>
+           <div className="flex-1 overflow-y-auto p-2 custom-scrollbar">
+              <button 
+                onClick={() => handleFolderSelect(null)}
+                className={`w-full text-left px-3 py-2 rounded mb-1 text-sm font-serif transition-colors flex items-center gap-2
+                  ${selectedFolderId === null && !searchQuery ? 'bg-amber-900/40 text-amber-100' : 'text-amber-400 hover:bg-amber-900/10'}
+                `}
+              >
+                <span className="opacity-70">✧</span> Unkategorisiert
+              </button>
+              
+              <div className="my-2 border-t border-amber-900/20"></div>
+
+              <FolderTree 
+                folders={folders} 
+                selectedFolderId={selectedFolderId}
+                onSelect={handleFolderSelect}
+                onDropArticle={handleMoveArticle}
+              />
+           </div>
+           <div className="p-2 border-t border-amber-900/30 text-[10px] text-amber-700 text-center font-serif">
+             {folders.length} Ordner
+           </div>
+        </div>
+
+        {/* PANE 2: Article List */}
+        <div className="w-72 border-r border-amber-900/30 flex flex-col bg-black/10 shrink-0">
+          <div className="flex-1 overflow-y-auto custom-scrollbar">
+            {filteredArticles.length === 0 ? (
+               <div className="p-8 text-center text-amber-500/30 text-xs italic font-serif">
+                 {searchQuery ? 'Keine Ergebnisse' : 'Leere'}
+               </div>
+            ) : (
+              <ArticleList 
+                articles={filteredArticles}
+                selectedId={selectedArticle?.id}
+                onSelect={handleArticleSelect}
+                onDelete={handleDelete}
+              />
             )}
+          </div>
+          <div className="p-2 bg-black/20 border-t border-amber-900/30 flex justify-between items-center text-[10px] text-amber-600 font-serif">
+             <span>{filteredArticles.length} Einträge</span>
+             <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="hover:text-amber-300">
+               {isSidebarOpen ? '« Seitenleiste' : '» Seitenleiste'}
+             </button>
+          </div>
+        </div>
 
-            <div className="flex gap-2">
-              <Link
-                href={`/games/${gameId}/ArticleView/WriteArticle`}
-                className="px-3 py-2 border border-amber-900/40 rounded-sm font-serif text-xs text-amber-200/80 bg-amber-900/10 hover:bg-amber-900/30 transition-colors"
-              >
-              ✎ Neuer Artikel
-              </Link>
-              <Link
-              href={`/games/${gameId}/ArticleView/NeuerArtikel`}
-              className="px-3 py-2 border border-amber-900/40 rounded-sm font-serif text-xs text-amber-200/80 bg-amber-900/10 hover:bg-amber-900/30 transition-colors"
-              >
-              ⬆ Artikel hochladen
-              </Link>
-              <Link
-              href={`/games/${gameId}/ArticleView/Ordnerstruktur`}
-              className="px-3 py-2 border border-amber-900/40 rounded-sm font-serif text-xs text-amber-200/80 bg-amber-900/10 hover:bg-amber-900/30 transition-colors"
-              >
-              📁 Ordner
-              </Link>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <span className="text-amber-200/50 font-serif text-xs">Löschmodus:</span>
-              <label className="flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  className="sr-only"
-                  checked={deleteMode}
-                  onChange={(e) => setDeleteMode(e.target.checked)}
-                />
-                <div className={`w-10 h-5 rounded-full transition-colors ${
-                  deleteMode ? 'bg-red-600' : 'bg-amber-900/50'
-                }`}>
-                  <div className={`w-4 h-4 bg-white rounded-full shadow transition-transform mt-0.5 ${
-                    deleteMode ? 'translate-x-5' : 'translate-x-0.5'
-                  }`} />
-                </div>
-                <span className="ml-2 text-xs">🗑️</span>
-              </label>
-            </div>
+        {/* PANE 3: Viewer */}
+        <div className="flex-1 bg-gradient-to-br from-black/5 to-amber-950/20 relative overflow-hidden flex flex-col">
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+            <ArticleViewer 
+              selected={selectedArticle} 
+              articles={articles} 
+              onSelectArticle={handleArticleSelect} 
+            />
           </div>
         </div>
       </div>
 
-      {/* Tab-Navigation und Inhalt */}
-      <div className="flex gap-4">
-        {/* Sidebar-Folderliste */}
-        <div className="w-64 shrink-0">
-          <SidebarFolderList
-            folders={folders}
-            selectedFolderId={selectedFolderId}
-            onSelectFolder={setSelectedFolderId}
-          />
-        </div>
-
-        {/* FolderView bleibt rechts davon */}
-        <div className="flex-1">
-          <FolderView
-            folders={folders} 
-            articles={articles}
-            articlesByFolder={articlesByFolder}
-            uncategorized={uncategorized}
-            collapsedFolders={collapsedFolders}
-            selectedId={selected?.id}
-            deleteMode={deleteMode}
-            pendingMoves={pendingMoves}
-            onToggleFolder={toggleFolder}
-            onDrop={handleDrop}
-            onDragOver={handleDragOver}
-            onDragEnter={handleDragEnter}
-            onDragLeave={handleDragLeave}
-            onSelectArticle={setSelected}
-            onDeleteArticle={handleDelete}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-          />
-        </div>
-      </div>
-
-      {/* Ausgewählter Artikel */}
-      <ArticleViewer
-        selected={selected}
-        articles={articles}
-        onSelectArticle={setSelected}
-      />
-
-      <style jsx>{`
-        .drop-zone.drop-active {
-          background-color: rgba(251, 191, 36, 0.1);
-          border-color: rgba(251, 191, 36, 0.3);
+      <style jsx global>{`
+        .btn-icon {
+          @apply w-8 h-8 flex items-center justify-center rounded border border-amber-900/30 text-amber-400 hover:bg-amber-900/40 hover:text-amber-100 transition-colors bg-black/30;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: rgba(0, 0, 0, 0.2);
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(146, 64, 14, 0.3);
+          border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: rgba(146, 64, 14, 0.5);
         }
       `}</style>
     </div>
