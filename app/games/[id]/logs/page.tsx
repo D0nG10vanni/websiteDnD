@@ -53,6 +53,7 @@ export default function CombinedPage() {
   const [selectedArticleFromLogs, setSelectedArticleFromLogs] = useState<Post | null>(null);
   const [selectedArticleContent, setSelectedArticleContent] = useState<string | null>(null);
   const [isLoadingArticleContent, setIsLoadingArticleContent] = useState(false);
+  const [gameTitle, setGameTitle] = useState<string>('');
 
   // --- DASHBOARD STATE ---
   const [windows, setWindows] = useState<WindowState[]>([]);
@@ -78,6 +79,20 @@ export default function CombinedPage() {
 
       if (foldersError) console.error(foldersError);
       else setFolders(foldersData || []);
+
+  // --- NEU: 3. Spiel-Namen laden & Tab-Titel setzen ---
+      const { data: gameData, error: gameError } = await supabase
+        .from('games')
+        .select('name') // oder 'title', je nachdem wie deine Spalte heißt
+        .eq('id', gameId)
+        .single();
+
+      if (!gameError && gameData) {
+         setGameTitle(gameData.name);
+         document.title = gameData.name; // <--- DAS HIER ÄNDERT DEN TAB-NAMEN
+      } else {
+         document.title = `Spiel ${gameId}`; // Fallback
+      }
 
       setIsLoading(false);
 
