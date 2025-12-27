@@ -10,7 +10,11 @@ module.exports = {
     "./app/**/*.{js,ts,jsx,tsx}",
     "./components/**/*.{js,ts,jsx,tsx}",
   ],
-  plugins: [typography],
+  pplugins: [
+    typography,
+    require('tailwind-scrollbar'), // <--- Das hier muss neu dazu!
+  ],
+  
   theme: {
     extend: {
       typography: (theme) => ({
