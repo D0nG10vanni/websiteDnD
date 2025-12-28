@@ -269,26 +269,47 @@ export default function StoryFlowDesigner({ gameId = 1 }: { gameId?: number }) {
   }, [showToast]);
 
   // Edges berechnen
-  const computeEdges = useCallback((nodeList: StoryNode[]): Edge[] => {
-    const nodeMap = new Map(nodeList.map((n) => [n.id, n]));
-    return nodeList.flatMap((target) => {
-      const predecessors = target.data.predecessors || [];
-      return predecessors.map((sourceId: string) => {
-        const source = nodeMap.get(sourceId);
-        if (!source) return null; // Edge case safety
-        
-        return {
-          id: `${sourceId}->${target.id}`,
+  // Edges berechnen
+  // In story.tsx:
+
+// Edges berechnen
+const computeEdges = useCallback((nodeList: StoryNode[]): Edge[] => {
+  const nodeMap = new Map(nodeList.map((n) => [n.id, n]));
+  
+  // WICHTIG: Eine Map benutzen, um EINDEUTIGE Keys zu garantieren
+  const uniqueEdges = new Map<string, Edge>();
+
+  nodeList.forEach((target) => {
+    const predecessors = target.data.predecessors || [];
+    
+    // Safety First: Selbst wenn "A" zweimal im Array steht, nehmen wir es nur einmal
+    const distinctPredecessors = [...new Set(predecessors)];
+
+    distinctPredecessors.forEach((sourceId: string) => {
+      const source = nodeMap.get(sourceId);
+      if (!source) return; // Schutz gegen gelöschte Nodes
+
+      // Der Key, der den Fehler verursacht hat
+      const edgeId = `${sourceId}->${target.id}`;
+
+      // Wir fügen die Edge nur hinzu, wenn wir diese ID noch nicht haben
+      if (!uniqueEdges.has(edgeId)) {
+        uniqueEdges.set(edgeId, {
+          id: edgeId,
           source: sourceId,
           target: target.id,
           markerEnd: { type: MarkerType.ArrowClosed },
           animated: true,
           type: "smoothstep",
           style: { stroke: '#64748b', strokeWidth: 2 }
-        };
-      }).filter(Boolean) as Edge[];
+        });
+      }
     });
-  }, []);
+  });
+
+  // Aus der Map wieder ein Array machen
+  return Array.from(uniqueEdges.values());
+}, []);
 
   // Drill Down Funktion (in Sub-Quest eintauchen)
   const handleDrillDown = useCallback((nodeId: string, nodeLabel: string) => {
@@ -440,7 +461,15 @@ export default function StoryFlowDesigner({ gameId = 1 }: { gameId?: number }) {
       const targetNode = state.nodes.find(n => n.id === target);
       if(!targetNode) return;
       
-      const newPreds = [...(targetNode.data.predecessors || []), source];
+      const currentPreds = targetNode.data.predecessors || [];
+
+      // --- FIX START: Verhindere Duplikate ---
+      if (currentPreds.includes(source)) {
+        console.warn("Verbindung existiert bereits!");
+        return; 
+      }
+
+      const newPreds = [...currentPreds, source];
       
       dispatch({ 
         type: 'UPDATE_NODE_DATA', 

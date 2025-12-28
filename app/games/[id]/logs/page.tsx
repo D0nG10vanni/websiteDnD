@@ -19,6 +19,9 @@ import type { Post } from '@/lib/types';
 import { ArticleViewer } from '@/components/articleBrowser/ArticleViewer'; 
 import PlayerDashboardGrid from '@/components/PlayerDashboardGrid'; 
 
+// Optional: GameSelector falls du ihn nutzt, sonst den Import weglassen
+// import GameSelector from '@/components/GameSelector'; 
+
 type WindowType = 'logs' | 'reader' | 'graph' | 'timeline' | 'story' | 'players' | 'browser' | 'articles';
 
 interface WindowState {
@@ -39,10 +42,12 @@ export default function CombinedPage() {
   const gameId = parseInt(params?.id as string, 10);
   const supabase = useSupabaseClient();
 
+  // --- DATA STATES ---
   const [articles, setArticles] = useState<Post[]>([]);
   const [folders, setFolders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
+  // Tab State
   const [activeTab, setActiveTab] = useState<'dashboard' | 'articles' | 'logs' | 'graph' | 'timeline' | 'story' | 'players'>('dashboard');
   
   // Legacy State
@@ -53,24 +58,73 @@ export default function CombinedPage() {
   // Game Title
   const [gameTitle, setGameTitle] = useState<string>('');
 
-  // Dashboard State
+  // --- DASHBOARD STATES ---
   const [windows, setWindows] = useState<WindowState[]>([]);
   const [activeZIndex, setActiveZIndex] = useState(10);
   const [isClient, setIsClient] = useState(false);
-  const [canvasHeight, setCanvasHeight] = useState(1200); // Standard-Höhe etwas größer starten
+  const [canvasHeight, setCanvasHeight] = useState(1200);
 
-  // --- AUTOMATISCHE HÖHENBERECHNUNG (Beim Laden/Loslassen) ---
+  // Status, ob wir das Layout schon geladen haben (um Default-Fenster zu verhindern)
+  const [hasLoadedLayout, setHasLoadedLayout] = useState(false);
+
+  // --- 1. LOCAL STORAGE: LADEN ---
+  // Wir machen das separat VOR dem Data Fetch, oder direkt darin.
+  const loadLayoutFromStorage = () => {
+    if (typeof window === 'undefined') return false;
+    try {
+        const storageKey = `dnd_dashboard_save_${gameId}`;
+        const saved = localStorage.getItem(storageKey);
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            
+            // Validiere grob, ob Daten okay sind
+            if (parsed.windows && Array.isArray(parsed.windows)) {
+                setWindows(parsed.windows);
+                // Stelle sicher, dass Z-Index weiterzählt
+                const maxZ = Math.max(...parsed.windows.map((w: WindowState) => w.zIndex || 10), 10);
+                setActiveZIndex(maxZ + 1);
+            }
+            if (parsed.canvasHeight) setCanvasHeight(parsed.canvasHeight);
+            if (parsed.activeTab) setActiveTab(parsed.activeTab);
+            
+            return true; // Erfolgreich geladen
+        }
+    } catch (e) {
+        console.error("Fehler beim Laden des Layouts:", e);
+    }
+    return false; // Nichts gefunden
+  };
+
+  // --- 2. LOCAL STORAGE: SPEICHERN ---
+  // Speichert automatisch, wenn sich Fenster, Canvas oder Tab ändern
+  useEffect(() => {
+    if (!isClient || !gameId || !hasLoadedLayout) return;
+
+    const timeoutId = setTimeout(() => {
+        const storageKey = `dnd_dashboard_save_${gameId}`;
+        const stateToSave = {
+            windows,
+            canvasHeight,
+            activeTab
+        };
+        localStorage.setItem(storageKey, JSON.stringify(stateToSave));
+    }, 500); // Debounce: Speichert erst 500ms nach der letzten Änderung
+
+    return () => clearTimeout(timeoutId);
+  }, [windows, canvasHeight, activeTab, gameId, isClient, hasLoadedLayout]);
+
+
+  // --- AUTOMATISCHE HÖHENBERECHNUNG DES CANVAS ---
   useEffect(() => {
     if (windows.length === 0) return;
     const maxBottom = Math.max(...windows.map(w => w.y + (w.isMinimized ? 40 : w.height)));
-    
-    // Immer mindestens 100vh oder Screen-Height garantieren + Puffer
     const minRequired = maxBottom + 600; 
     if (minRequired > canvasHeight) {
         setCanvasHeight(minRequired);
     }
-  }, [windows]); // Reagiert auf onDragStop Updates
+  }, [windows]); 
 
+  // --- INITIAL DATA LOAD ---
   useEffect(() => {
     setIsClient(true);
     if (!gameId || isNaN(gameId)) return;
@@ -90,7 +144,12 @@ export default function CombinedPage() {
 
       setIsLoading(false);
 
-      if ((a || []).length >= 0) {
+      // HIER IST DIE LOGIK FÜR DAS LADEN ODER DEFAULTS:
+      const loaded = loadLayoutFromStorage();
+      setHasLoadedLayout(true);
+
+      // Nur wenn NICHTS geladen wurde, öffnen wir die Standard-Fenster
+      if (!loaded && (a || []).length >= 0) {
          spawnWindow('logs', 'Logbuch', 20, 80, 400, 600);
          spawnWindow('graph', 'Wissensnetz', 440, 80, 500, 400);
       }
@@ -141,6 +200,7 @@ export default function CombinedPage() {
     }
   };
 
+  // --- RENDER CONTENT ---
   const renderWindowContent = (win: WindowState) => {
     switch (win.type) {
         case 'logs': return <Logs gameId={gameId.toString()} onArticleSelect={handleDashboardArticleSelect} />;
@@ -170,20 +230,30 @@ export default function CombinedPage() {
     }
   };
 
-  // Legacy Handlers
-  const handleArticleSelectFromLogs = async (t: string) => {};
+  // Legacy Handlers für die alten Tabs
+  const handleArticleSelectFromLogs = async (title: string) => {
+     // ... (deine alte Logik, hier gekürzt da Fokus auf Dashboard)
+     const matchedArticle = articles.find((a) => a.title === title);
+     if (matchedArticle) {
+        setSelectedArticleFromLogs(matchedArticle);
+        // fetch content logic here if needed for legacy tab
+     }
+  };
   const handleGraphNodeClick = (a: Post) => setActiveTab('articles');
-  const handleDeleteArticle = async (id: number) => true;
+  const handleDeleteArticle = async (id: number) => { /* delete logic */ return true; };
   const handleAddArticle = (n: Post) => {};
   const handleUpdateArticle = (u: Post) => {};
 
+
+  // --- RETURN UI ---
+
+  if (isNaN(gameId)) return <div className="p-10 text-error text-center">Kein Spiel ausgewählt (ID fehlt).</div>;
   if (!isClient) return null; 
 
   return (
     <div className="min-h-screen bg-base-200" data-theme="fantasy">
       {/* Navigation */}
       <div className="flex justify-center py-6 gap-8 text-lg flex-wrap px-4 bg-base-100 border-b border-base-300 shadow-sm z-50 relative">
-        <div className="flex justify-center py-6 gap-8 text-lg flex-wrap px-4 bg-base-100 border-b border-base-300 shadow-sm z-50 relative">
         <button className={activeTab === 'dashboard' ? 'underline text-amber-500 font-bold' : 'text-gray-400 hover:text-amber-600 transition'} onClick={() => setActiveTab('dashboard')}>🖥️ Dashboard</button>
         <span className="text-gray-300">|</span>
         <button className={activeTab === 'logs' ? 'underline text-amber-400 font-bold' : 'text-gray-400'} onClick={() => setActiveTab('logs')}>Logs</button>
@@ -192,7 +262,6 @@ export default function CombinedPage() {
         <button className={activeTab === 'timeline' ? 'underline text-amber-400 font-bold' : 'text-gray-400'} onClick={() => setActiveTab('timeline')}>Timeline</button>
         <button className={activeTab === 'story' ? 'underline text-amber-400 font-bold' : 'text-gray-400'} onClick={() => setActiveTab('story')}>Story</button>
         <button className={activeTab === 'players' ? 'underline text-amber-400 font-bold' : 'text-gray-400'} onClick={() => setActiveTab('players')}>Spieler</button>
-        </div>
       </div>
 
       <div className="relative w-full">
@@ -209,13 +278,15 @@ export default function CombinedPage() {
               <button type="button" onClick={() => spawnWindow('players', 'Gefährten', 50, 50, 400, 300)} className="btn btn-xs btn-ghost">Spieler</button>
               <button type="button" onClick={() => spawnWindow('timeline', 'Timeline', 100, 400, 800, 300)} className="btn btn-xs btn-ghost">Timeline</button>
               <div className="flex-grow"></div>
-              <div className="text-[10px] text-gray-500 hidden md:block">Infinite Canvas Height: {Math.round(canvasHeight)}px</div>
+              <div className="text-[10px] text-gray-500 hidden md:block">
+                  {hasLoadedLayout ? 'Layout Saved' : 'Default Layout'} • Height: {Math.round(canvasHeight)}px
+              </div>
            </div>
 
            {/* Scrollable Viewport */}
            <div className="w-full h-full pt-10 relative overflow-auto custom-scrollbar bg-[#050505]">
              
-             {/* INFINITE CANVAS - Wächst mit dem Inhalt */}
+             {/* INFINITE CANVAS */}
              <div 
                 className="w-full relative bg-[url('/img/dark-pattern.png')] bg-repeat transition-all duration-75 ease-linear"
                 style={{ height: `${canvasHeight}px`, minHeight: '100%' }}
@@ -226,13 +297,11 @@ export default function CombinedPage() {
                         size={{ width: win.width, height: win.isMinimized ? 36 : win.height }}
                         position={{ x: win.x, y: win.y }}
                         
-                        // --- LIVE UPDATE BEIM ZIEHEN ---
+                        // LIVE UPDATE + CANVAS EXPAND
                         onDrag={(e, d) => {
-                            // Berechne Unterkante des Fensters während des Ziehens
                             const currentBottom = d.y + (win.isMinimized ? 40 : win.height);
-                            // Wenn wir näher als 400px an den Rand kommen, vergrößere den Canvas sofort
                             if (currentBottom + 400 > canvasHeight) {
-                                setCanvasHeight(currentBottom + 600); // Gib direkt etwas mehr Platz
+                                setCanvasHeight(currentBottom + 600);
                             }
                         }}
 
@@ -247,7 +316,6 @@ export default function CombinedPage() {
                         style={{ zIndex: win.zIndex }}
                         className={`flex flex-col bg-base-100 shadow-2xl border border-amber-900/30 rounded ${win.zIndex === activeZIndex ? 'ring-1 ring-amber-400' : ''}`}
                     >
-                        {/* Fenster Inhalt */}
                         <div className="flex flex-col w-full h-full overflow-hidden rounded bg-base-100">
                             <div className="window-header h-9 flex-none bg-base-300 border-b border-amber-900/10 flex justify-between items-center px-2 cursor-move select-none"
                                 onDoubleClick={() => toggleMinimize(win.id)}>
@@ -267,87 +335,40 @@ export default function CombinedPage() {
            </div>
         </div>
 
-        {/* =====================================================================================
-            ALTE TABS (Legacy View)
-           ===================================================================================== */}
-        
-        <div className="px-6 relative">
-          <div className="relative overflow-hidden min-h-[500px]">
-          
-          {/* LOGS TAB */}
-          <div className={activeTab === 'logs' ? 'block' : 'hidden'}>
-            <div className="flex flex-col lg:flex-row gap-4">
-              <div className="lg:w-1/2">
-                {selectedArticleFromLogs ? (
-                  <div className="bg-black/20 backdrop-blur-sm rounded-lg border border-amber-900/30 p-6 max-h-[700px] overflow-y-auto custom-scrollbar">
-                     <div className="flex justify-between">
-                       <h3 className="font-serif text-xl text-amber-200">{selectedArticleFromLogs.title}</h3>
-                       <button onClick={() => setSelectedArticleFromLogs(null)}>✕</button>
-                     </div>
-                     {isLoadingArticleContent ? <div className="text-amber-200/50">Lade...</div> : <MarkdownRenderer content={selectedArticleContent || ''} onLinkClick={handleArticleSelectFromLogs} className="prose-mystical-article" />}
-                  </div>
-                ) : <div className="text-center text-amber-200/30 p-10 border border-amber-900/20 rounded-lg">Wähle einen Link im Log</div>}
-              </div>
-              <div className="lg:w-1/2">
-                <Logs gameId={gameId.toString()} onArticleSelect={handleArticleSelectFromLogs} />
-              </div>
-            </div>
-          </div>
-
-          <div className={activeTab === 'articles' ? 'block' : 'hidden'}>
+        {/* ALTE TABS */}
+        <div className={`px-6 py-6 ${activeTab === 'logs' ? 'block' : 'hidden'}`}>
+             <Logs gameId={gameId.toString()} onArticleSelect={handleArticleSelectFromLogs} />
+        </div>
+        <div className={`px-6 py-6 ${activeTab === 'articles' ? 'block' : 'hidden'}`}>
              <ArticleBrowser articles={articles} gameId={gameId} isLoading={isLoading} onDeleteArticle={handleDeleteArticle} onAddArticle={handleAddArticle} onUpdateArticle={handleUpdateArticle} />
-          </div>
-
-          <div className={activeTab === 'graph' ? 'block' : 'hidden'}>
+        </div>
+        <div className={`px-6 py-6 ${activeTab === 'graph' ? 'block' : 'hidden'}`}>
             <div className="w-full flex justify-center">
               {!isLoading && <GraphView articles={articles} folders={folders} onNodeClick={handleGraphNodeClick} width={1000} height={700} />}
             </div>
-          </div>
-
-          <div className={activeTab === 'timeline' ? 'block' : 'hidden'}>
+        </div>
+        <div className={`px-6 py-6 ${activeTab === 'timeline' ? 'block' : 'hidden'}`}>
              <Timeline gameId={gameId} />
-          </div>
-
-          <div className={activeTab === 'story' ? 'block' : 'hidden'}>
+        </div>
+        <div className={`px-6 py-6 ${activeTab === 'story' ? 'block' : 'hidden'}`}>
              <StoryBuilder gameId={gameId} />
-          </div>
-
-          <div className={activeTab === 'players' ? 'block' : 'hidden'}>
+        </div>
+        <div className={`px-6 py-6 ${activeTab === 'players' ? 'block' : 'hidden'}`}>
              <h2 className="text-2xl font-bold mb-6 text-center text-amber-400 font-serif">Die Gefährten</h2>
              <PlayerList gameId={gameId} />
-          </div>
-
         </div>
+
       </div>
       
-      {/* GLOBAL CSS Styles Fallback, falls Tailwind-Plugin versagt */}
+      {/* GLOBAL CSS Styles */}
       <style jsx global>{`
         :global(.prose-mystical-article) { color: rgb(251 191 36 / 0.9); }
-
-        ::-webkit-scrollbar {
-          width: 8px !important;
-          height: 8px !important;
-          display: block !important;
-        }
-        ::-webkit-scrollbar-track {
-          background: rgba(0, 0, 0, 0.2) !important; 
-        }
-        ::-webkit-scrollbar-thumb {
-          background: #78350f !important;
-          border-radius: 4px;
-          border: 1px solid #000;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-          background: #d97706 !important;
-        }
-        
-        /* Firefox */
-        * {
-            scrollbar-width: thin;
-            scrollbar-color: #78350f rgba(0, 0, 0, 0.2);
-        }
+        ::-webkit-scrollbar { width: 8px !important; height: 8px !important; display: block !important; }
+        ::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.2) !important; }
+        ::-webkit-scrollbar-thumb { background: #78350f !important; border-radius: 4px; border: 1px solid #000; }
+        ::-webkit-scrollbar-thumb:hover { background: #d97706 !important; }
+        * { scrollbar-width: thin; scrollbar-color: #78350f rgba(0, 0, 0, 0.2); }
       `}</style>
-      </div>
     </div>
   );
 }
