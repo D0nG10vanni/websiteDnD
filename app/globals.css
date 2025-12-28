@@ -866,3 +866,55 @@ mark {
     display: none;
   }
 }
+.time-tracker-card {
+  background-color: #2a2a2a; /* Dunkler Hintergrund passend zu DnD Themes */
+  color: #f0f0f0;
+  border: 1px solid #444;
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+  width: 250px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+
+.time-display {
+  font-family: 'Courier New', monospace; /* Monospace für Zahlen */
+  font-size: 2.5rem;
+  margin: 15px 0;
+  font-weight: bold;
+  color: #ffcc00; /* Goldener Akzent */
+}
+
+.button-group {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: opacity 0.2s;
+}
+
+.btn:hover {
+  opacity: 0.9;
+}
+
+.btn-start {
+  background-color: #28a745;
+  color: white;
+}
+
+.btn-stop {
+  background-color: #dc3545;
+  color: white;
+}
+
+.btn-reset {
+  background-color: #6c757d;
+  color: white;
+}

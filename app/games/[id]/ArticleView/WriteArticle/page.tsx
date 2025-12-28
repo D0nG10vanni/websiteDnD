@@ -218,7 +218,7 @@ export default function NeuerArtikelPage() {
           content: content.trim(),
           game_id: gameId,
           folder_id: folderId,
-          user_id: user.id
+          creator: user.id // <--- HIER GEÄNDERT (vorher: user_id: user.id)
         })
         .select()
         .single()

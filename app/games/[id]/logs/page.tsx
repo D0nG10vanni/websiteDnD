@@ -20,8 +20,9 @@ import type { Post } from '@/lib/types';
 import { ArticleViewer } from '@/components/articleBrowser/ArticleViewer'; 
 import PlayerDashboardGrid from '@/components/PlayerDashboardGrid';
 import InfiniteStarfield from '@/components/InfiniteStarfield';
+import TimeTracker from '@/components/TimeTracker';
 
-type WindowType = 'logs' | 'reader' | 'graph' | 'timeline' | 'story' | 'players' | 'browser' | 'articles';
+type WindowType = 'logs' | 'reader' | 'graph' | 'timeline' | 'story' | 'players' | 'browser' | 'articles' | 'timer';
 
 interface WindowState {
   id: string;
@@ -173,6 +174,7 @@ export default function CombinedPage() {
         case 'articles': case 'browser': return (<div className="h-full w-full overflow-y-auto bg-[#1a1a1a] custom-scrollbar"><ArticleBrowser articles={articles} gameId={gameId} isLoading={isLoading} onDeleteArticle={handleDeleteArticle} onAddArticle={handleAddArticle} onUpdateArticle={handleUpdateArticle} /></div>);
         case 'timeline': return <Timeline gameId={gameId} />;
         case 'story': return <StoryBuilder gameId={gameId} />;
+        case 'timer': return <div className="h-full w-full bg-[#2a2a2a] flex items-center justify-center"><TimeTracker /></div>;
         default: return null;
     }
   };
@@ -257,6 +259,7 @@ export default function CombinedPage() {
               <span className="text-[10px] font-bold text-amber-600/80 mr-2 uppercase tracking-widest">Tools:</span>
               <button onClick={() => spawnWindow('logs', 'Logbuch')} className="px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-white/5 rounded transition">LOGS</button>
               <button onClick={() => spawnWindow('articles', 'Artikel')} className="px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-white/5 rounded transition">ARTIKEL</button>
+              <button onClick={() => spawnWindow('timer', 'Zeit', 100, 100, 290, 240)} className="px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-white/5 rounded transition">TIMER</button>
               <button onClick={() => spawnWindow('graph', 'Graph')} className="px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-white/5 rounded transition">GRAPH</button>
               <button onClick={() => spawnWindow('reader', 'Reader')} className="px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-white/5 rounded transition">READER</button>
               <button onClick={() => spawnWindow('players', 'Gefährten')} className="px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-white/5 rounded transition">SPIELER</button>
