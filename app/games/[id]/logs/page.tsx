@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useSupabaseClient } from '@supabase/auth-helpers-react';
 import { Rnd } from 'react-rnd'; 
 
 // --- IMPORTS ---
+// Stelle sicher, dass diese Pfade in deinem Projekt korrekt sind
 import ArticleBrowser from '@/components/ArticleBrowser.client';
 import Logs from '@/components/Logs.client';
 import MarkdownRenderer from '@/components/MarkdownRenderer';
@@ -15,12 +16,10 @@ import StoryBuilder from '@/components/storyGraph/story';
 import PlayerList from '@/components/PlayerList.client';
 import type { Post } from '@/lib/types';
 
-// Components
+// Dashboard Components
 import { ArticleViewer } from '@/components/articleBrowser/ArticleViewer'; 
-import PlayerDashboardGrid from '@/components/PlayerDashboardGrid'; 
-
-// Optional: GameSelector falls du ihn nutzt, sonst den Import weglassen
-// import GameSelector from '@/components/GameSelector'; 
+import PlayerDashboardGrid from '@/components/PlayerDashboardGrid';
+import InfiniteStarfield from '@/components/InfiniteStarfield';
 
 type WindowType = 'logs' | 'reader' | 'graph' | 'timeline' | 'story' | 'players' | 'browser' | 'articles';
 
@@ -47,28 +46,22 @@ export default function CombinedPage() {
   const [folders, setFolders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
-  // Tab State
   const [activeTab, setActiveTab] = useState<'dashboard' | 'articles' | 'logs' | 'graph' | 'timeline' | 'story' | 'players'>('dashboard');
   
-  // Legacy State
   const [selectedArticleFromLogs, setSelectedArticleFromLogs] = useState<Post | null>(null);
   const [selectedArticleContent, setSelectedArticleContent] = useState<string | null>(null);
   const [isLoadingArticleContent, setIsLoadingArticleContent] = useState(false);
   
-  // Game Title
   const [gameTitle, setGameTitle] = useState<string>('');
 
   // --- DASHBOARD STATES ---
   const [windows, setWindows] = useState<WindowState[]>([]);
   const [activeZIndex, setActiveZIndex] = useState(10);
   const [isClient, setIsClient] = useState(false);
-  const [canvasHeight, setCanvasHeight] = useState(1200);
-
-  // Status, ob wir das Layout schon geladen haben (um Default-Fenster zu verhindern)
+  const [canvasHeight, setCanvasHeight] = useState(1200); 
   const [hasLoadedLayout, setHasLoadedLayout] = useState(false);
 
-  // --- 1. LOCAL STORAGE: LADEN ---
-  // Wir machen das separat VOR dem Data Fetch, oder direkt darin.
+  // --- 1. LAYOUT LADEN ---
   const loadLayoutFromStorage = () => {
     if (typeof window === 'undefined') return false;
     try {
@@ -76,55 +69,39 @@ export default function CombinedPage() {
         const saved = localStorage.getItem(storageKey);
         if (saved) {
             const parsed = JSON.parse(saved);
-            
-            // Validiere grob, ob Daten okay sind
             if (parsed.windows && Array.isArray(parsed.windows)) {
                 setWindows(parsed.windows);
-                // Stelle sicher, dass Z-Index weiterzählt
                 const maxZ = Math.max(...parsed.windows.map((w: WindowState) => w.zIndex || 10), 10);
                 setActiveZIndex(maxZ + 1);
             }
-            if (parsed.canvasHeight) setCanvasHeight(parsed.canvasHeight);
+            if (parsed.canvasHeight) setCanvasHeight(Math.max(parsed.canvasHeight, 1200));
             if (parsed.activeTab) setActiveTab(parsed.activeTab);
-            
-            return true; // Erfolgreich geladen
+            return true;
         }
-    } catch (e) {
-        console.error("Fehler beim Laden des Layouts:", e);
-    }
-    return false; // Nichts gefunden
+    } catch (e) { console.error(e); }
+    return false;
   };
 
-  // --- 2. LOCAL STORAGE: SPEICHERN ---
-  // Speichert automatisch, wenn sich Fenster, Canvas oder Tab ändern
+  // --- 2. LAYOUT SPEICHERN ---
   useEffect(() => {
     if (!isClient || !gameId || !hasLoadedLayout) return;
-
     const timeoutId = setTimeout(() => {
         const storageKey = `dnd_dashboard_save_${gameId}`;
-        const stateToSave = {
-            windows,
-            canvasHeight,
-            activeTab
-        };
+        const stateToSave = { windows, canvasHeight, activeTab };
         localStorage.setItem(storageKey, JSON.stringify(stateToSave));
-    }, 500); // Debounce: Speichert erst 500ms nach der letzten Änderung
-
+    }, 500);
     return () => clearTimeout(timeoutId);
   }, [windows, canvasHeight, activeTab, gameId, isClient, hasLoadedLayout]);
 
-
-  // --- AUTOMATISCHE HÖHENBERECHNUNG DES CANVAS ---
+  // --- CANVAS AUTO-GROW ---
   useEffect(() => {
     if (windows.length === 0) return;
     const maxBottom = Math.max(...windows.map(w => w.y + (w.isMinimized ? 40 : w.height)));
     const minRequired = maxBottom + 600; 
-    if (minRequired > canvasHeight) {
-        setCanvasHeight(minRequired);
-    }
+    if (minRequired > canvasHeight) setCanvasHeight(minRequired);
   }, [windows]); 
 
-  // --- INITIAL DATA LOAD ---
+  // --- INITIAL DATA FETCH ---
   useEffect(() => {
     setIsClient(true);
     if (!gameId || isNaN(gameId)) return;
@@ -143,12 +120,9 @@ export default function CombinedPage() {
       }
 
       setIsLoading(false);
-
-      // HIER IST DIE LOGIK FÜR DAS LADEN ODER DEFAULTS:
       const loaded = loadLayoutFromStorage();
       setHasLoadedLayout(true);
 
-      // Nur wenn NICHTS geladen wurde, öffnen wir die Standard-Fenster
       if (!loaded && (a || []).length >= 0) {
          spawnWindow('logs', 'Logbuch', 20, 80, 400, 600);
          spawnWindow('graph', 'Wissensnetz', 440, 80, 500, 400);
@@ -165,164 +139,180 @@ export default function CombinedPage() {
       id: newId, type, title, x, y, width: w, height: h, zIndex: newZ, isMinimized: false, articleData: data
     }]);
   };
-
   const closeWindow = (id: string) => setWindows(prev => prev.filter(w => w.id !== id));
   const toggleMinimize = (id: string) => setWindows(prev => prev.map(w => w.id === id ? { ...w, isMinimized: !w.isMinimized } : w));
-  
   const bringToFront = (id: string) => {
     const newZ = activeZIndex + 1;
     setActiveZIndex(newZ);
     setWindows(prev => prev.map(w => w.id === id ? { ...w, zIndex: newZ } : w));
   };
-  
   const updateWindowPos = (id: string, d: { x: number, y: number }) => setWindows(prev => prev.map(w => w.id === id ? { ...w, x: d.x, y: d.y } : w));
   const updateWindowSize = (id: string, s: { width: number, height: number }, pos: { x: number, y: number }) => setWindows(prev => prev.map(w => w.id === id ? { ...w, width: s.width, height: s.height, x: pos.x, y: pos.y } : w));
 
   const handleDashboardArticleSelect = (articleOrTitle: string | Post) => {
     let matchedArticle: Post | undefined;
-    if (typeof articleOrTitle === 'string') {
-        matchedArticle = articles.find((a) => a.title === articleOrTitle);
-    } else {
-        matchedArticle = articleOrTitle;
-    }
+    if (typeof articleOrTitle === 'string') matchedArticle = articles.find((a) => a.title === articleOrTitle);
+    else matchedArticle = articleOrTitle;
     if (!matchedArticle) return; 
 
     const existingReader = windows.find(w => w.type === 'reader');
     if (existingReader) {
-      setWindows(prev => prev.map(w => 
-        w.id === existingReader.id 
-          ? { ...w, title: matchedArticle!.title, articleData: matchedArticle, zIndex: activeZIndex + 1, isMinimized: false } 
-          : w
-      ));
+      setWindows(prev => prev.map(w => w.id === existingReader.id ? { ...w, title: matchedArticle!.title, articleData: matchedArticle, zIndex: activeZIndex + 1, isMinimized: false } : w));
       setActiveZIndex(prev => prev + 1);
     } else {
       spawnWindow('reader', matchedArticle.title, 300, 100, 500, 600, matchedArticle);
     }
   };
 
-  // --- RENDER CONTENT ---
   const renderWindowContent = (win: WindowState) => {
     switch (win.type) {
         case 'logs': return <Logs gameId={gameId.toString()} onArticleSelect={handleDashboardArticleSelect} />;
-        case 'graph': return (
-            <div className="w-full h-full bg-black overflow-hidden">
-                <GraphView articles={articles} folders={folders} onNodeClick={(node) => handleDashboardArticleSelect(node)} width={win.width} height={win.height} />
-            </div>
-        );
-        case 'reader': return (
-            <div className="h-full w-full overflow-y-auto bg-[#0a0a0a] p-0 custom-scrollbar scrollbar-thin scrollbar-thumb-amber-700 scrollbar-track-transparent">
-                <ArticleViewer key={win.articleData?.id || 'empty'} selected={win.articleData || null} articles={articles} onSelectArticle={handleDashboardArticleSelect} />
-            </div>
-        );
-        case 'players': return (
-            <div className="h-full w-full bg-[#050505]">
-                <PlayerDashboardGrid gameId={gameId} />
-            </div>
-        );
-        case 'articles': case 'browser': return (
-            <div className="h-full w-full overflow-y-auto bg-[#1a1a1a] custom-scrollbar">
-                <ArticleBrowser articles={articles} gameId={gameId} isLoading={isLoading} onDeleteArticle={()=>{return Promise.resolve(true)}} onAddArticle={()=>{}} onUpdateArticle={()=>{}} />
-            </div>
-        );
+        case 'graph': return (<div className="w-full h-full bg-black overflow-hidden"><GraphView articles={articles} folders={folders} onNodeClick={(node) => handleDashboardArticleSelect(node)} width={win.width} height={win.height} /></div>);
+        case 'reader': return (<div className="h-full w-full overflow-y-auto bg-[#0a0a0a] p-0 custom-scrollbar scrollbar-thin scrollbar-thumb-amber-700 scrollbar-track-transparent"><ArticleViewer key={win.articleData?.id || 'empty'} selected={win.articleData || null} articles={articles} onSelectArticle={handleDashboardArticleSelect} /></div>);
+        case 'players': return (<div className="h-full w-full bg-[#050505]"><PlayerDashboardGrid gameId={gameId} /></div>);
+        case 'articles': case 'browser': return (<div className="h-full w-full overflow-y-auto bg-[#1a1a1a] custom-scrollbar"><ArticleBrowser articles={articles} gameId={gameId} isLoading={isLoading} onDeleteArticle={handleDeleteArticle} onAddArticle={handleAddArticle} onUpdateArticle={handleUpdateArticle} /></div>);
         case 'timeline': return <Timeline gameId={gameId} />;
         case 'story': return <StoryBuilder gameId={gameId} />;
         default: return null;
     }
   };
 
-  // Legacy Handlers für die alten Tabs
+  // Legacy Handlers
   const handleArticleSelectFromLogs = async (title: string) => {
-     // ... (deine alte Logik, hier gekürzt da Fokus auf Dashboard)
-     const matchedArticle = articles.find((a) => a.title === title);
-     if (matchedArticle) {
-        setSelectedArticleFromLogs(matchedArticle);
-        // fetch content logic here if needed for legacy tab
-     }
+    const matchedArticle = articles.find((a) => a.title === title);
+    if (!matchedArticle) { alert(`Kein Artikel "${title}" gefunden.`); return; }
+    setSelectedArticleFromLogs(matchedArticle);
+    setSelectedArticleContent(null);
+    setIsLoadingArticleContent(true);
+    try {
+      const { data, error } = await supabase.from('posts').select('content').eq('id', matchedArticle.id).single();
+      if (error) setSelectedArticleContent('*Die Zeichen verblassen...*');
+      else setSelectedArticleContent(data.content);
+    } catch (e) { setSelectedArticleContent('*Fehler beim Lesen...*'); }
+    finally { setIsLoadingArticleContent(false); }
   };
   const handleGraphNodeClick = (a: Post) => setActiveTab('articles');
-  const handleDeleteArticle = async (id: number) => { /* delete logic */ return true; };
-  const handleAddArticle = (n: Post) => {};
-  const handleUpdateArticle = (u: Post) => {};
+  const handleDeleteArticle = async (id: number) => {
+    const { error } = await supabase.from('posts').delete().eq('id', id);
+    if (!error) {
+      setArticles((prev) => prev.filter((a) => a.id !== id));
+      if (selectedArticleFromLogs?.id === id) { setSelectedArticleFromLogs(null); setSelectedArticleContent(null); }
+      return true;
+    }
+    return false;
+  };
+  const handleAddArticle = (n: Post) => setArticles((prev) => [...prev, n]);
+  const handleUpdateArticle = (u: Post) => setArticles((prev) => prev.map((a) => a.id === u.id ? u : a));
 
-
-  // --- RETURN UI ---
-
-  if (isNaN(gameId)) return <div className="p-10 text-error text-center">Kein Spiel ausgewählt (ID fehlt).</div>;
+  if (isNaN(gameId)) return <div className="p-10 text-error text-center">Kein Spiel ausgewählt.</div>;
   if (!isClient) return null; 
 
   return (
-    <div className="min-h-screen bg-base-200" data-theme="fantasy">
-      {/* Navigation */}
-      <div className="flex justify-center py-6 gap-8 text-lg flex-wrap px-4 bg-base-100 border-b border-base-300 shadow-sm z-50 relative">
-        <button className={activeTab === 'dashboard' ? 'underline text-amber-500 font-bold' : 'text-gray-400 hover:text-amber-600 transition'} onClick={() => setActiveTab('dashboard')}>🖥️ Dashboard</button>
-        <span className="text-gray-300">|</span>
-        <button className={activeTab === 'logs' ? 'underline text-amber-400 font-bold' : 'text-gray-400'} onClick={() => setActiveTab('logs')}>Logs</button>
-        <button className={activeTab === 'articles' ? 'underline text-amber-400 font-bold' : 'text-gray-400'} onClick={() => setActiveTab('articles')}>Artikel</button>
-        <button className={activeTab === 'graph' ? 'underline text-amber-400 font-bold' : 'text-gray-400'} onClick={() => setActiveTab('graph')}>Graph</button>
-        <button className={activeTab === 'timeline' ? 'underline text-amber-400 font-bold' : 'text-gray-400'} onClick={() => setActiveTab('timeline')}>Timeline</button>
-        <button className={activeTab === 'story' ? 'underline text-amber-400 font-bold' : 'text-gray-400'} onClick={() => setActiveTab('story')}>Story</button>
-        <button className={activeTab === 'players' ? 'underline text-amber-400 font-bold' : 'text-gray-400'} onClick={() => setActiveTab('players')}>Spieler</button>
+    <div className="min-h-screen bg-black text-gray-300 font-sans selection:bg-amber-900 selection:text-white relative overflow-hidden">
+      
+      {/* ========================================================================
+        1. LAYER (Ganz hinten): HINTERGRUND
+        ========================================================================
+        Muss im DOM zuerst kommen, damit z-0 funktioniert, ohne Stacking Context Issues.
+      */}
+      <div className="fixed inset-0 z-0 pointer-events-none bg-black">
+          <div className="absolute top-[-20%] left-[-20%] w-[80%] h-[80%] rounded-full bg-indigo-950/30 blur-[120px]"></div>
+          <div className="absolute bottom-[-20%] right-[-20%] w-[80%] h-[80%] rounded-full bg-slate-900/40 blur-[100px]"></div>
+          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[60%] h-[60%] rounded-full bg-[radial-gradient(circle,rgba(30,27,75,0.2)_0%,transparent_70%)]"></div>
       </div>
 
-      <div className="relative w-full">
-        {/* DASHBOARD TAB */}
-        <div className={`${activeTab === 'dashboard' ? 'block' : 'hidden'} h-[calc(100vh-100px)] w-full relative`}>
-           
-           {/* Taskbar */}
-           <div className="absolute top-0 left-0 right-0 h-10 bg-base-300/90 backdrop-blur border-b border-amber-900/20 flex items-center px-4 gap-2 z-[40]">
-              <span className="text-xs font-bold text-amber-600 mr-2 uppercase tracking-widest">Tools:</span>
-              <button type="button" onClick={() => spawnWindow('logs', 'Logbuch')} className="btn btn-xs btn-ghost">Logs</button>
-              <button type="button" onClick={() => spawnWindow('articles', 'Artikel')} className="btn btn-xs btn-ghost">Artikel</button>
-              <button type="button" onClick={() => spawnWindow('graph', 'Graph')} className="btn btn-xs btn-ghost">Graph</button>
-              <button type="button" onClick={() => spawnWindow('story', 'Story')} className="btn btn-xs btn-ghost">Story</button>
-              <button type="button" onClick={() => spawnWindow('players', 'Gefährten', 50, 50, 400, 300)} className="btn btn-xs btn-ghost">Spieler</button>
-              <button type="button" onClick={() => spawnWindow('timeline', 'Timeline', 100, 400, 800, 300)} className="btn btn-xs btn-ghost">Timeline</button>
+      {/* ========================================================================
+        2. LAYER: DASHBOARD TABS (NAVIGATION)
+        ========================================================================
+        Klebt unter dem Global Header.
+        Global Header = h-16 (64px). -> top-16.
+        Z-Index: 9999 (Unter Global Header, über Content).
+      */}
+      <div className="fixed top-16 left-0 w-full h-16 flex items-center justify-center gap-8 px-4 bg-[#0a0a0a]/95 backdrop-blur-md border-b border-white/5 shadow-2xl z-[9999]">
+        <button className={activeTab === 'dashboard' ? 'text-amber-500 font-bold tracking-widest uppercase text-sm border-b-2 border-amber-500 pb-1' : 'text-gray-500 hover:text-gray-300 uppercase tracking-widest text-sm transition-colors'} onClick={() => setActiveTab('dashboard')}>🖥️ Dashboard</button>
+        <span className="text-gray-700">|</span>
+        <button className={activeTab === 'logs' ? 'text-amber-500 font-bold tracking-widest uppercase text-sm' : 'text-gray-500 hover:text-gray-300 uppercase tracking-widest text-sm transition-colors'} onClick={() => setActiveTab('logs')}>Logs</button>
+        <button className={activeTab === 'articles' ? 'text-amber-500 font-bold tracking-widest uppercase text-sm' : 'text-gray-500 hover:text-gray-300 uppercase tracking-widest text-sm transition-colors'} onClick={() => setActiveTab('articles')}>Artikel</button>
+        <button className={activeTab === 'graph' ? 'text-amber-500 font-bold tracking-widest uppercase text-sm' : 'text-gray-500 hover:text-gray-300 uppercase tracking-widest text-sm transition-colors'} onClick={() => setActiveTab('graph')}>Graph</button>
+        <button className={activeTab === 'timeline' ? 'text-amber-500 font-bold tracking-widest uppercase text-sm' : 'text-gray-500 hover:text-gray-300 uppercase tracking-widest text-sm transition-colors'} onClick={() => setActiveTab('timeline')}>Timeline</button>
+        <button className={activeTab === 'story' ? 'text-amber-500 font-bold tracking-widest uppercase text-sm' : 'text-gray-500 hover:text-gray-300 uppercase tracking-widest text-sm transition-colors'} onClick={() => setActiveTab('story')}>Story</button>
+        <button className={activeTab === 'players' ? 'text-amber-500 font-bold tracking-widest uppercase text-sm' : 'text-gray-500 hover:text-gray-300 uppercase tracking-widest text-sm transition-colors'} onClick={() => setActiveTab('players')}>Spieler</button>
+      </div>
+
+      {/* ========================================================================
+        3. LAYER: CONTENT LOGIK
+        ========================================================================
+      */}
+
+      {/* --- FALL A: DASHBOARD IST AKTIV --- */}
+      {/* Wir brauchen hier die Tools-Leiste, die an die Tabs geklebt wird. */}
+      {activeTab === 'dashboard' && (
+         <>
+           {/* TOOLS LEISTE 
+               Position: Unter den Tabs. Tabs enden bei 128px (64+64).
+               Also: top-32.
+               Z-Index: 9998 (Unter Tabs).
+           */}
+           <div className="fixed top-32 left-0 w-full h-10 bg-[#050505]/90 backdrop-blur border-b border-white/5 flex items-center px-4 gap-2 z-[9998]">
+              <span className="text-[10px] font-bold text-amber-600/80 mr-2 uppercase tracking-widest">Tools:</span>
+              <button onClick={() => spawnWindow('logs', 'Logbuch')} className="px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-white/5 rounded transition">LOGS</button>
+              <button onClick={() => spawnWindow('articles', 'Artikel')} className="px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-white/5 rounded transition">ARTIKEL</button>
+              <button onClick={() => spawnWindow('graph', 'Graph')} className="px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-white/5 rounded transition">GRAPH</button>
+              <button onClick={() => spawnWindow('reader', 'Reader')} className="px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-white/5 rounded transition">READER</button>
+              <button onClick={() => spawnWindow('players', 'Gefährten')} className="px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-white/5 rounded transition">SPIELER</button>
+              <button onClick={() => spawnWindow('timeline', 'Timeline')} className="px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-white/5 rounded transition">TIMELINE</button>
               <div className="flex-grow"></div>
-              <div className="text-[10px] text-gray-500 hidden md:block">
-                  {hasLoadedLayout ? 'Layout Saved' : 'Default Layout'} • Height: {Math.round(canvasHeight)}px
+              <div className="text-[9px] text-gray-600 font-mono hidden md:block">
+                  {hasLoadedLayout ? 'SESSION RESTORED' : 'NEW SESSION'} • H: {Math.round(canvasHeight)}px
               </div>
            </div>
 
-           {/* Scrollable Viewport */}
-           <div className="w-full h-full pt-10 relative overflow-auto custom-scrollbar bg-[#050505]">
+           {/* CANVAS AREA 
+               Position: Unter der Tools Leiste. 
+               Rechnung: 128px (Tabs Ende) + 40px (Tools Höhe) = 168px.
+               Also: top-[168px].
+           */}
+           <div className="fixed top-[168px] left-0 right-0 bottom-0 overflow-auto custom-scrollbar z-10">
              
-             {/* INFINITE CANVAS */}
-             <div 
-                className="w-full relative bg-[url('/img/dark-pattern.png')] bg-repeat transition-all duration-75 ease-linear"
-                style={{ height: `${canvasHeight}px`, minHeight: '100%' }}
-             >
+             {/* Infinite Stars & Windows Container */}
+             <div className="relative w-full transition-all duration-75 ease-linear" style={{ height: `${canvasHeight}px`, minHeight: '100%' }}>
+                <div className="absolute top-0 left-0 w-full z-0 pointer-events-none">
+                     <InfiniteStarfield height={canvasHeight} />
+                </div>
+                
+                {/* Windows Rendering */}
                 {windows.map((win) => (
                     <Rnd
                         key={win.id}
-                        size={{ width: win.width, height: win.isMinimized ? 36 : win.height }}
+                        size={{ width: win.width, height: win.isMinimized ? 32 : win.height }}
                         position={{ x: win.x, y: win.y }}
-                        
-                        // LIVE UPDATE + CANVAS EXPAND
                         onDrag={(e, d) => {
                             const currentBottom = d.y + (win.isMinimized ? 40 : win.height);
-                            if (currentBottom + 400 > canvasHeight) {
-                                setCanvasHeight(currentBottom + 600);
+                            if (currentBottom + 500 > canvasHeight) {
+                                setCanvasHeight(currentBottom + 1000);
                             }
                         }}
-
                         onDragStop={(e, d) => updateWindowPos(win.id, { x: d.x, y: d.y })}
                         onResizeStop={(e, dir, ref, delta, pos) => {
                             if (!win.isMinimized) updateWindowSize(win.id, { width: parseInt(ref.style.width), height: parseInt(ref.style.height) }, pos);
                         }}
                         onClick={() => bringToFront(win.id)}
-                        minWidth={300} minHeight={36} 
+                        minWidth={300} minHeight={32} 
                         dragHandleClassName="window-header"
                         enableResizing={!win.isMinimized}
                         style={{ zIndex: win.zIndex }}
-                        className={`flex flex-col bg-base-100 shadow-2xl border border-amber-900/30 rounded ${win.zIndex === activeZIndex ? 'ring-1 ring-amber-400' : ''}`}
+                        className={`flex flex-col bg-[#0f0f0f] shadow-[0_0_40px_rgba(0,0,0,0.5)] border border-white/10 rounded-lg overflow-hidden ${win.zIndex === activeZIndex ? 'ring-1 ring-amber-500/50 border-amber-500/30' : ''}`}
                     >
-                        <div className="flex flex-col w-full h-full overflow-hidden rounded bg-base-100">
-                            <div className="window-header h-9 flex-none bg-base-300 border-b border-amber-900/10 flex justify-between items-center px-2 cursor-move select-none"
+                        <div className="flex flex-col w-full h-full overflow-hidden">
+                            <div className="window-header h-8 flex-none bg-[#1a1a1a] border-b border-white/5 flex justify-between items-center px-3 cursor-move select-none group"
                                 onDoubleClick={() => toggleMinimize(win.id)}>
-                                <span className="text-xs font-bold text-amber-700 uppercase tracking-wide truncate max-w-[200px]">{win.title}</span>
-                                <div className="flex gap-1" onMouseDown={(e) => e.stopPropagation()}>
-                                    <button onClick={() => toggleMinimize(win.id)} className="w-6 h-6 flex items-center justify-center hover:bg-black/10 rounded text-amber-600 font-bold text-xs">_</button>
-                                    <button onClick={() => closeWindow(win.id)} className="w-6 h-6 flex items-center justify-center hover:bg-red-900/20 hover:text-red-500 rounded text-gray-400 font-bold text-xs">✕</button>
+                                <div className="flex items-center gap-2">
+                                    <div className={`w-2 h-2 rounded-full ${win.zIndex === activeZIndex ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]' : 'bg-gray-600'}`}></div>
+                                    <span className="text-[11px] font-bold text-gray-300 uppercase tracking-wide truncate max-w-[200px] group-hover:text-white transition-colors">{win.title}</span>
+                                </div>
+                                <div className="flex gap-2 opacity-50 group-hover:opacity-100 transition-opacity" onMouseDown={(e) => e.stopPropagation()}>
+                                    <button onClick={() => toggleMinimize(win.id)} className="hover:text-amber-400 text-gray-500 text-xs">_</button>
+                                    <button onClick={() => closeWindow(win.id)} className="hover:text-red-400 text-gray-500 text-xs">✕</button>
                                 </div>
                             </div>
                             <div className={`flex-1 min-h-0 relative w-full ${win.isMinimized ? 'hidden' : 'block'}`}>
@@ -333,41 +323,64 @@ export default function CombinedPage() {
                 ))}
              </div>
            </div>
-        </div>
+         </>
+      )}
 
-        {/* ALTE TABS */}
-        <div className={`px-6 py-6 ${activeTab === 'logs' ? 'block' : 'hidden'}`}>
-             <Logs gameId={gameId.toString()} onArticleSelect={handleArticleSelectFromLogs} />
-        </div>
-        <div className={`px-6 py-6 ${activeTab === 'articles' ? 'block' : 'hidden'}`}>
-             <ArticleBrowser articles={articles} gameId={gameId} isLoading={isLoading} onDeleteArticle={handleDeleteArticle} onAddArticle={handleAddArticle} onUpdateArticle={handleUpdateArticle} />
-        </div>
-        <div className={`px-6 py-6 ${activeTab === 'graph' ? 'block' : 'hidden'}`}>
-            <div className="w-full flex justify-center">
-              {!isLoading && <GraphView articles={articles} folders={folders} onNodeClick={handleGraphNodeClick} width={1000} height={700} />}
-            </div>
-        </div>
-        <div className={`px-6 py-6 ${activeTab === 'timeline' ? 'block' : 'hidden'}`}>
-             <Timeline gameId={gameId} />
-        </div>
-        <div className={`px-6 py-6 ${activeTab === 'story' ? 'block' : 'hidden'}`}>
-             <StoryBuilder gameId={gameId} />
-        </div>
-        <div className={`px-6 py-6 ${activeTab === 'players' ? 'block' : 'hidden'}`}>
-             <h2 className="text-2xl font-bold mb-6 text-center text-amber-400 font-serif">Die Gefährten</h2>
-             <PlayerList gameId={gameId} />
-        </div>
 
-      </div>
+      {/* --- FALL B: ANDERE TABS SIND AKTIV --- */}
+      {/* Hier gibt es keine Tools-Leiste.
+         Der Content beginnt direkt unter den Tabs (128px).
+         Wir nutzen pt-32 (Padding Top 128px) für den Container.
+      */}
+      {activeTab !== 'dashboard' && (
+        <div className="pt-32 w-full h-screen overflow-auto relative z-10">
+             
+             {/* Logs Tab */}
+             <div className={`px-6 py-6 h-full ${activeTab === 'logs' ? 'block' : 'hidden'}`}>
+                <div className="flex flex-col lg:flex-row gap-4 h-full">
+                  <div className="lg:w-1/2 h-full flex flex-col">
+                    {selectedArticleFromLogs ? (
+                      <div className="bg-black/40 backdrop-blur-md rounded-xl border border-white/10 p-6 h-full overflow-y-auto custom-scrollbar">
+                         <div className="flex justify-between items-center mb-4 border-b border-white/10 pb-2">
+                            <h3 className="font-serif text-xl text-amber-100">{selectedArticleFromLogs.title}</h3>
+                            <button onClick={() => setSelectedArticleFromLogs(null)} className="text-gray-500 hover:text-white">✕</button>
+                         </div>
+                         {isLoadingArticleContent ? <div className="text-amber-200/50 animate-pulse">Lade Archiv...</div> : <MarkdownRenderer content={selectedArticleContent || ''} onLinkClick={handleArticleSelectFromLogs} className="prose-mystical-article" />}
+                      </div>
+                    ) : <div className="text-center text-gray-500/50 p-20 border border-white/5 rounded-xl italic">Wähle einen Eintrag aus dem Logbuch</div>}
+                  </div>
+                  <div className="lg:w-1/2 h-full"><Logs gameId={gameId.toString()} onArticleSelect={handleArticleSelectFromLogs} /></div>
+                </div>
+             </div>
+
+             {/* Andere Tabs */}
+             <div className={`px-6 py-6 h-full ${activeTab === 'articles' ? 'block' : 'hidden'}`}>
+                <ArticleBrowser articles={articles} gameId={gameId} isLoading={isLoading} onDeleteArticle={handleDeleteArticle} onAddArticle={handleAddArticle} onUpdateArticle={handleUpdateArticle} />
+             </div>
+             
+             <div className={`px-6 py-6 h-full ${activeTab === 'graph' ? 'block' : 'hidden'}`}>
+                <div className="w-full flex justify-center h-full items-center">{!isLoading && <GraphView articles={articles} folders={folders} onNodeClick={handleGraphNodeClick} width={1000} height={700} />}</div>
+             </div>
+             
+             <div className={`px-6 py-6 h-full ${activeTab === 'timeline' ? 'block' : 'hidden'}`}><Timeline gameId={gameId} /></div>
+             <div className={`px-6 py-6 h-full ${activeTab === 'story' ? 'block' : 'hidden'}`}><StoryBuilder gameId={gameId} /></div>
+             <div className={`px-6 py-6 h-full ${activeTab === 'players' ? 'block' : 'hidden'}`}>
+                 <h2 className="text-3xl font-bold mb-8 text-center text-transparent bg-clip-text bg-gradient-to-r from-amber-200 to-amber-600 font-serif drop-shadow-sm">Die Gefährten</h2>
+                 <PlayerList gameId={gameId} />
+             </div>
+        </div>
+      )}
       
-      {/* GLOBAL CSS Styles */}
+      {/* GLOBAL STYLES */}
       <style jsx global>{`
-        :global(.prose-mystical-article) { color: rgb(251 191 36 / 0.9); }
-        ::-webkit-scrollbar { width: 8px !important; height: 8px !important; display: block !important; }
-        ::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.2) !important; }
-        ::-webkit-scrollbar-thumb { background: #78350f !important; border-radius: 4px; border: 1px solid #000; }
-        ::-webkit-scrollbar-thumb:hover { background: #d97706 !important; }
-        * { scrollbar-width: thin; scrollbar-color: #78350f rgba(0, 0, 0, 0.2); }
+        :global(.prose-mystical-article) { color: #e5e7eb; }
+        :global(.prose-mystical-article h1), :global(.prose-mystical-article h2) { color: #fcd34d; font-family: serif; }
+        :global(.prose-mystical-article a) { color: #60a5fa; text-decoration: underline; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0a0a0a; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
+        ::-webkit-scrollbar-corner { background: #0a0a0a; }
       `}</style>
     </div>
   );
