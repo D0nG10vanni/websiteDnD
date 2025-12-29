@@ -43,8 +43,7 @@ export default function PlayerList({ gameId }: { gameId: number }) {
   const [addPlayerError, setAddPlayerError] = useState<string | null>(null);
   const [addPlayerSuccess, setAddPlayerSuccess] = useState<string | null>(null);
 
-  // 1. Prüfen, ob der aktuelle User der Gamemaster ist
-  useEffect(() => {
+useEffect(() => {
     async function checkGamemaster() {
       if (!user) {
         setGmCheckStatus('Warte auf Login...');
@@ -53,7 +52,12 @@ export default function PlayerList({ gameId }: { gameId: number }) {
       
       const { data, error } = await supabase
         .from('games')
-        .select('gamemaster_uuid')
+        .select(`
+          gamemaster_uuid,
+          Users!games_gamemaster_uuid_fkey (
+            username
+          )
+        `)
         .eq('id', gameId)
         .single();
 
@@ -63,18 +67,27 @@ export default function PlayerList({ gameId }: { gameId: number }) {
         return;
       }
 
-      if (data) {
-        if (data.gamemaster_uuid === user.id) {
-          setIsGamemaster(true);
-          setGmCheckStatus('Erfolg: Du bist der Gamemaster.');
-        } else {
-          setIsGamemaster(false);
-          setGmCheckStatus(`Kein GM. Erwartet: ${data.gamemaster_uuid}, Bist: ${user.id}`);
-        }
+      if (!data) {
+        setGmCheckStatus('Kein Spiel gefunden.');
+        return;
+      }
+
+      // Daten extrahieren
+      // TypeScript Cast "as any" hilft hier, falls die Typen noch nicht aktualisiert sind
+      const gmName = (data as any).Users?.username || 'Unbekannt';
+      const gmUuid = data.gamemaster_uuid;
+
+      // WICHTIG: Hier die Variable gmUuid nutzen, nicht den String 'gamemaster_uuid'
+      if (gmUuid === user.id) {
+        setIsGamemaster(true);
+        setGmCheckStatus(`Erfolg: Du bist der Gamemaster (${gmName}).`);
+      } else {
+        setIsGamemaster(false);
+        setGmCheckStatus(`Du bist nicht der Spielleiter! Der Spielleiter in diesem Spiel ist ${gmName}, du bist aber ${user.user_metadata?.username || user.id}`);
       }
     }
     
-    // Nur ausführen, wenn gameId und user da sind
+    // Aufruf der Funktion (muss NACH der geschweiften Klammer der Funktion stehen)
     if (gameId) checkGamemaster();
     
   }, [gameId, user, supabase]);

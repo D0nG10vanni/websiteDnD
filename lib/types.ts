@@ -65,5 +65,29 @@ export type Character = {
     traits?: { 
         name: string 
         rarity: number }[] 
+    inventory?: InventoryItem[]; // Das neue Feld
 }
 
+// Basis Item Definition (aus der 'items' Tabelle)
+export interface BaseItem {
+  id: number;
+  name: string;
+  type: string;
+  rarity: string;
+  damage?: string;
+  armor_sp?: number;
+  weight?: number;
+  price?: number;
+  description?: string;
+}
+
+// Das Item im Inventar (aus der 'character_items' Tabelle)
+export interface InventoryItem {
+  id: number; // ID des character_items Eintrags
+  item_id: number;
+  quantity: number;
+  equipped: boolean;
+  custom_name?: string;
+  // Hier joinen wir das eigentliche Item hinein
+  items: BaseItem | null; 
+}

@@ -2,6 +2,26 @@
 
 import { supabase } from '@/lib/supabaseClient'
 
+// Typ für das Inventar definieren (optional, aber hilfreich für TypeScript)
+export type InventoryEntry = {
+  id: number
+  quantity: number
+  equipped: boolean
+  custom_name?: string
+  items: {
+    id: number
+    name: string
+    type: string
+    rarity: string
+    damage?: string
+    armor_sp?: number
+    weight?: number
+    price?: number
+    description?: string
+    effects?: any
+  } | null
+}
+
 export type Character = {
   id: string
   name: string
@@ -14,10 +34,12 @@ export type Character = {
   games?: {
     name: string
   }
-  player_id: number // KORRIGIERT: Ist in der DB ein int8 (Zahl), keine UUID
+  player_id: number
   created_at: string
   updated_at: string
   alive: boolean
+  // NEU: Inventar Feld hinzufügen
+  inventory?: InventoryEntry[]
 }
 
 export type CreateCharacterData = {
@@ -37,7 +59,7 @@ export class CharacterService {
    */
   private static async resolvePlayerId(authUserId: string): Promise<number> {
     const { data, error } = await supabase
-      .from('Users') // Achtung: Case-Sensitive, falls Tabelle "Users" heißt
+      .from('Users')
       .select('player_id')
       .eq('user_id', authUserId)
       .single()
@@ -51,15 +73,25 @@ export class CharacterService {
   }
 
   /**
-   * Lädt alle Charaktere eines Users
+   * Lädt alle Charaktere eines Users (INKLUSIVE INVENTAR)
    */
   static async getUserCharacters(userId: string): Promise<Character[]> {
     const playerId = await this.resolvePlayerId(userId)
 
     const { data, error } = await supabase
       .from('characters')
-      // WICHTIG: Wir holen alles (*) UND den Namen aus der Tabelle 'games'
-      .select('*, games (name)') 
+      // UPDATE: Query erweitert um inventory:character_items und items:items
+      .select(`
+        *, 
+        games (name),
+        inventory:character_items(
+          id,
+          quantity,
+          equipped,
+          custom_name,
+          items:items(*)
+        )
+      `) 
       .eq('player_id', playerId)
       .order('created_at', { ascending: false })
 
@@ -67,20 +99,29 @@ export class CharacterService {
       throw new Error(`Fehler beim Laden der Charaktere: ${error.message}`)
     }
 
-    // Supabase gibt manchmal Arrays zurück, Typ-Sicherheit herstellen:
-    // Wir casten das Ergebnis, damit TypeScript weiß, dass 'games' da ist.
     return (data as unknown as Character[]) || []
   }
 
   /**
-   * Lädt einen spezifischen Charakter
+   * Lädt einen spezifischen Charakter (INKLUSIVE INVENTAR)
    */
   static async getCharacter(characterId: string, userId: string): Promise<Character | null> {
     const playerId = await this.resolvePlayerId(userId)
 
     const { data, error } = await supabase
       .from('characters')
-      .select('*')
+      // UPDATE: Auch hier das Inventar laden, damit es beim Einzelabruf da ist
+      .select(`
+        *, 
+        games (name),
+        inventory:character_items(
+          id,
+          quantity,
+          equipped,
+          custom_name,
+          items:items(*)
+        )
+      `)
       .eq('id', characterId)
       .eq('player_id', playerId)
       .single()
@@ -92,20 +133,17 @@ export class CharacterService {
       throw new Error(`Fehler beim Laden des Charakters: ${error.message}`)
     }
 
-    return data
+    return data as unknown as Character
   }
 
-  /**
-   * Erstellt einen neuen Charakter
-   */
+  // ... Rest der Klasse bleibt unverändert ...
+
   /**
    * Lädt alle Spiele, in denen der User (via player_id) Mitglied ist.
-   * Nutzt die Verknüpfungstabelle 'game_players'.
    */
   static async getUserGames(userId: string): Promise<{ id: number; name: string }[]> {
     const playerId = await this.resolvePlayerId(userId)
 
-    // Wir fragen die Verknüpfungstabelle ab und holen die Game-Details dazu
     const { data, error } = await supabase
       .from('game_players')
       .select('game_id, games (id, name)')
@@ -116,36 +154,28 @@ export class CharacterService {
       return []
     }
 
-    // Daten flachklopfen: Wir wollen nur eine Liste von {id, name}
     return data.map((entry: any) => ({
       id: entry.games.id,
       name: entry.games.name
     }))
   }
 
-  // Update der createCharacter Methode, um game_id zu akzeptieren
   static async createCharacter(characterData: CreateCharacterData, userId: string): Promise<Character> {
     const playerId = await this.resolvePlayerId(userId)
 
     const newCharacter = {
       ...characterData,
       player_id: playerId,
-      game_id: characterData.game_id || null, // Hier wichtig: Game ID speichern
-      // ... Rest wie vorher
+      game_id: characterData.game_id || null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     }
-    // ... Insert Logik ...
+
     const { data, error } = await supabase.from('characters').insert([newCharacter]).select().single()
     if (error) throw new Error(error.message)
     return data
   }
 
-  // Update Methode bleibt weitgehend gleich, da sie Partial<Data> nimmt
-
-  /**
-   * Aktualisiert einen Charakter
-   */
   static async updateCharacter(
     characterId: string, 
     updates: Partial<CreateCharacterData>, 
@@ -173,9 +203,6 @@ export class CharacterService {
     return data
   }
 
-  /**
-   * Löscht einen Charakter
-   */
   static async deleteCharacter(characterId: string, userId: string): Promise<void> {
     const playerId = await this.resolvePlayerId(userId)
 
@@ -190,11 +217,7 @@ export class CharacterService {
     }
   }
 
-  /**
-   * Markiert einen Charakter als tot/lebendig
-   */
   static async toggleCharacterStatus(characterId: string, userId: string): Promise<Character> {
-    // getCharacter ruft resolvePlayerId bereits intern auf, das ist okay
     const character = await this.getCharacter(characterId, userId)
     if (!character) {
       throw new Error('Charakter nicht gefunden')
@@ -203,12 +226,10 @@ export class CharacterService {
     return this.updateCharacter(characterId, { alive: !character.alive }, userId)
   }
 
-  /**
-   * Lädt Charaktere nach Spiel
-   */
   static async getCharactersByGame(gameId: string, userId: string): Promise<Character[]> {
     const playerId = await this.resolvePlayerId(userId)
 
+    // Optional: Hier könnte man auch das Inventar laden, falls der GM es sehen soll
     const { data, error } = await supabase
       .from('characters')
       .select('*')
@@ -223,9 +244,6 @@ export class CharacterService {
     return data || []
   }
 
-  /**
-   * Charakterstatistiken für einen User
-   */
   static async getCharacterStats(userId: string): Promise<{
     total: number
     alive: number
@@ -236,7 +254,6 @@ export class CharacterService {
     byRace: Record<string, number>
     byProfession: Record<string, number>
   }> {
-    // getUserCharacters nutzt bereits resolvePlayerId
     const characters = await this.getUserCharacters(userId)
 
     const alive = characters.filter(c => c.alive).length
@@ -266,9 +283,7 @@ export class CharacterService {
   }
 }
 
-/**
- * React Hook für Character-Management
- */
+// ... Hook (useUserCharacters) bleibt gleich, da er CharacterService aufruft ...
 import { useState, useEffect } from 'react'
 
 export function useUserCharacters(userId: string | undefined) {

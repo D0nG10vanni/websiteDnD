@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useAuth } from '@/lib/AuthContext'
 import { useUserCharacters, type Character } from '@/lib/characterService'
 import StatBlockEditor from '@/components/StatBlockEditor'
+import InventoryManager from '@/components/InventoryManager'
 
 // Hilfskomponente für Attribute (kleine Boxen)
 const StatBox = ({ label, value }: { label: string; value: any }) => (
@@ -183,12 +184,27 @@ export default function UserHomepage() {
               
               <StatBlockEditor 
                 initialCharacter={editingCharacter}
-                onSuccess={() => {
-                  setShowModal(false)
-                  refetch() // Liste neu laden
-                }}
+                onSuccess={() => { /*...*/ }}
                 onCancel={() => setShowModal(false)}
               />
+
+              {/* NEU: Inventar Sektion (nur wenn wir einen Charakter bearbeiten, nicht beim Erstellen) */}
+              {editingCharacter && editingCharacter.id && (
+                <div className="mt-8 pt-8 border-t border-slate-800">
+                  <InventoryManager 
+                    characterId={editingCharacter.id}
+                    initialInventory={editingCharacter.inventory?.map((entry: any) => ({
+                      id: entry.id,
+                      item_id: entry.item_id ?? entry.items?.id ?? entry.item?.id ?? 0,
+                      quantity: entry.quantity ?? 1,
+                      equipped: entry.equipped ?? false,
+                      custom_name: entry.custom_name,
+                      items: entry.items ?? entry.item ?? null,
+                    }))} // normalized to InventoryItem[]
+                    onUpdate={refetch} // WICHTIG: Damit die Hauptliste neu geladen wird nach Änderungen
+                  />
+                </div>
+              )}
             </div>
           </div>
         )}
