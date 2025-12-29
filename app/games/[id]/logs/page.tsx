@@ -265,7 +265,7 @@ export default function CombinedPage() {
                Also: top-32.
                Z-Index: 9998 (Unter Tabs).
            */}
-           <div className="fixed top-32 left-0 w-full h-10 bg-[#050505]/90 backdrop-blur border-b border-white/5 flex items-center px-4 gap-2 z-[9998]">
+           <div className="fixed top-32 left-0 right-0 z-50 h-16 bg-black/90 flex items-center justify-center border-b border-white/10 backdrop-blur-md0 backdrop-blur border-b border-white/5 flex items-center px-4 gap-2 z-[9998]">
               <span className="text-[10px] font-bold text-amber-600/80 mr-2 uppercase tracking-widest">Tools:</span>
               <button onClick={() => spawnWindow('logs', 'Logbuch')} className="px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-white/5 rounded transition">LOGS</button>
               <button onClick={() => spawnWindow('articles', 'Artikel')} className="px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-white/5 rounded transition">ARTIKEL</button>
@@ -348,7 +348,7 @@ export default function CombinedPage() {
       {activeTab !== 'dashboard' && (
         <div 
           data-theme="fantasy"
-          className="pt-32 w-full h-screen overflow-auto relative z-10 bg-base-200 text-base-content"
+          className="fixed top-32 left-0 right-0 bottom-0 w-full overflow-y-auto z-10 custom-scrollbar bg-base-200 text-base-content"
         >     
              {/* Logs Tab */}
              <div className={`px-6 py-6 h-full ${activeTab === 'logs' ? 'block' : 'hidden'}`}>
@@ -380,8 +380,7 @@ export default function CombinedPage() {
              <div className={`px-6 py-6 h-full ${activeTab === 'timeline' ? 'block' : 'hidden'}`}><Timeline gameId={gameId} /></div>
              <div className={`px-6 py-6 h-full ${activeTab === 'story' ? 'block' : 'hidden'}`}><StoryBuilder gameId={gameId} /></div>
              <div className={`px-6 py-6 h-full ${activeTab === 'players' ? 'block' : 'hidden'}`}>
-                 <h2 className="text-3xl font-bold mb-8 text-center text-transparent bg-clip-text bg-gradient-to-r from-amber-200 to-amber-600 font-serif drop-shadow-sm">Die Gefährten</h2>
-                 <PlayerList gameId={gameId} />
+                <PlayerList gameId={gameId} />
              </div>
         </div>
       )}

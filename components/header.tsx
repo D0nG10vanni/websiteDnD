@@ -39,7 +39,7 @@ const UserGreeting: React.FC<{ user: any; compact?: boolean }> = ({ user, compac
     }
     
     // 6. Fallback
-    return 'Abenteurer'
+    return 'Unbekannter Abenteurer'
   }
 
   // Bestimme Begrüßung basierend auf Tageszeit
