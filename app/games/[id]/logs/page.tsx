@@ -346,8 +346,10 @@ export default function CombinedPage() {
          Wir nutzen pt-32 (Padding Top 128px) für den Container.
       */}
       {activeTab !== 'dashboard' && (
-        <div className="pt-32 w-full h-screen overflow-auto relative z-10">
-             
+        <div 
+          data-theme="fantasy"
+          className="pt-32 w-full h-screen overflow-auto relative z-10 bg-base-200 text-base-content"
+        >     
              {/* Logs Tab */}
              <div className={`px-6 py-6 h-full ${activeTab === 'logs' ? 'block' : 'hidden'}`}>
                 <div className="flex flex-col lg:flex-row gap-4 h-full">

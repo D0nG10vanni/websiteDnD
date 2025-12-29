@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useSupabaseClient, useUser } from '@supabase/auth-helpers-react';
+import CharacterSheetModal from './CharacterSheetModal'; // NEU: Import
 
 interface Character {
   id: string;
@@ -35,15 +36,18 @@ export default function PlayerList({ gameId }: { gameId: number }) {
   const [playerGroups, setPlayerGroups] = useState<PlayerGroup[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
+  // Modal State
+  const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
+
   // Gamemaster States
   const [isGamemaster, setIsGamemaster] = useState(false);
-  const [gmCheckStatus, setGmCheckStatus] = useState<string>('Initialisiere...'); // Für Debugging
+  const [gmCheckStatus, setGmCheckStatus] = useState<string>('Initialisiere...');
   const [isAddingPlayer, setIsAddingPlayer] = useState(false);
   const [newPlayerName, setNewPlayerName] = useState('');
   const [addPlayerError, setAddPlayerError] = useState<string | null>(null);
   const [addPlayerSuccess, setAddPlayerSuccess] = useState<string | null>(null);
 
-useEffect(() => {
+  useEffect(() => {
     async function checkGamemaster() {
       if (!user) {
         setGmCheckStatus('Warte auf Login...');
@@ -72,22 +76,18 @@ useEffect(() => {
         return;
       }
 
-      // Daten extrahieren
-      // TypeScript Cast "as any" hilft hier, falls die Typen noch nicht aktualisiert sind
       const gmName = (data as any).Users?.username || 'Unbekannt';
       const gmUuid = data.gamemaster_uuid;
 
-      // WICHTIG: Hier die Variable gmUuid nutzen, nicht den String 'gamemaster_uuid'
       if (gmUuid === user.id) {
         setIsGamemaster(true);
         setGmCheckStatus(`Erfolg: Du bist der Gamemaster (${gmName}).`);
       } else {
         setIsGamemaster(false);
-        setGmCheckStatus(`Du bist nicht der Spielleiter! Der Spielleiter in diesem Spiel ist ${gmName}, du bist aber ${user.user_metadata?.username || user.id}`);
+        setGmCheckStatus(`Du bist nicht der Spielleiter! Der Spielleiter ist ${gmName}.`);
       }
     }
     
-    // Aufruf der Funktion (muss NACH der geschweiften Klammer der Funktion stehen)
     if (gameId) checkGamemaster();
     
   }, [gameId, user, supabase]);
@@ -123,7 +123,6 @@ useEffect(() => {
     charactersData.forEach((char: any) => {
       const pId = char.player_id;
       const userName = char.Users?.username || `Spieler ${pId}`;
-      const userAvatar = undefined; 
       const groupKey = String(pId);
 
       if (!groups[groupKey]) {
@@ -131,7 +130,7 @@ useEffect(() => {
           player: { 
             id: pId, 
             username: userName, 
-            avatar_url: userAvatar 
+            avatar_url: undefined 
           },
           characters: []
         };
@@ -152,7 +151,7 @@ useEffect(() => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameId, supabase]);
 
-  // 3. Spieler hinzufügen (Fix integriert)
+  // 3. Spieler hinzufügen
   const handleAddPlayer = async () => {
     setAddPlayerError(null);
     setAddPlayerSuccess(null);
@@ -160,10 +159,9 @@ useEffect(() => {
     if (!newPlayerName.trim()) return;
 
     try {
-      // User suchen
       const { data: userData, error: userError } = await supabase
         .from('Users')
-        .select('id') // Wir brauchen nur die ID
+        .select('id')
         .eq('username', newPlayerName)
         .single();
 
@@ -172,21 +170,17 @@ useEffect(() => {
         return;
       }
 
-      // Prüfen ob schon vorhanden
       const alreadyExists = playerGroups.some(g => String(g.player.id) === String(userData.id));
       if (alreadyExists) {
         setAddPlayerError('Dieser Spieler ist bereits Teil der Kampagne.');
         return;
       }
 
-      // INSERT (Korrigiert für deine Tabellenstruktur)
       const { error: insertError } = await supabase
         .from('characters')
         .insert({
           game_id: gameId,
           player_id: userData.id,
-          // player_uid entfernt, da nicht in DB
-          // active entfernt, da nicht in DB
           name: 'Neuer Charakter',
           race: 'Unbekannt',
           profession: 'Abenteurer',
@@ -197,7 +191,6 @@ useEffect(() => {
         });
 
       if (insertError) {
-        console.error("Insert Error:", insertError);
         setAddPlayerError(`Fehler: ${insertError.message}`);
         return;
       }
@@ -221,113 +214,121 @@ useEffect(() => {
   if (isLoading) return <div className="text-center py-10 text-amber-200 animate-pulse">Lade Gefährten...</div>;
 
   return (
-    <div className="space-y-12 relative">
+    <div className="space-y-6 relative">
       
-      {/* --- Gamemaster Controls --- */}
-      {isGamemaster ? (
-        <div className="flex justify-end mb-4">
-          {!isAddingPlayer ? (
-            <button 
-              onClick={() => setIsAddingPlayer(true)}
-              className="btn btn-sm btn-outline text-amber-400 border-amber-400 hover:bg-amber-400 hover:text-black gap-2 transition-all"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-              Spieler einladen
-            </button>
-          ) : (
-            <div className="bg-base-100 p-4 rounded-xl border border-amber-500/30 w-full max-w-md ml-auto animate-in fade-in slide-in-from-top-2 shadow-2xl shadow-black/50">
-              <h3 className="text-amber-200 font-serif mb-2">Spieler hinzufügen</h3>
-              <div className="flex gap-2">
-                <input 
-                  type="text" 
-                  placeholder="Username eingeben..." 
-                  className="input input-sm input-bordered w-full border-amber-900/50 focus:border-amber-500 bg-black/20"
-                  value={newPlayerName}
-                  onChange={(e) => setNewPlayerName(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleAddPlayer()}
-                />
-                <button onClick={handleAddPlayer} className="btn btn-sm btn-primary bg-amber-600 hover:bg-amber-700 border-none text-white">
-                  Add
-                </button>
-                <button onClick={() => setIsAddingPlayer(false)} className="btn btn-sm btn-ghost">
-                  ✕
-                </button>
-              </div>
-              {addPlayerError && <p className="text-error text-xs mt-2 font-bold">{addPlayerError}</p>}
-              {addPlayerSuccess && <p className="text-success text-xs mt-2">{addPlayerSuccess}</p>}
-            </div>
-          )}
+      {/* --- Titel & Controls --- */}
+      <div className="flex justify-between items-end border-b border-amber-900/30 pb-4 mb-6">
+        <div>
+           <h2 className="text-3xl font-serif text-amber-500">Die Gefährten</h2>
+           <p className="text-xs text-gray-500 mt-1">
+             {playerGroups.length} Spieler • {playerGroups.reduce((acc, g) => acc + g.characters.length, 0)} Charaktere
+           </p>
         </div>
-      ) : (
-        // Debugging-Anzeige falls Button fehlt (Kannst du später entfernen)
-        <div className="text-right text-[10px] text-gray-600 mb-2 opacity-50 hover:opacity-100 transition-opacity">
-          Status: {gmCheckStatus}
-        </div>
-      )}
 
-      {/* --- Empty State --- */}
-      {playerGroups.length === 0 && !isLoading && (
-        <div className="text-center py-10 text-gray-400">
-          <p className="mb-2 text-4xl">🕸️</p>
-          Keine Helden gefunden.
-          {isGamemaster && <p className="text-sm mt-2 text-amber-500">Nutze den Button oben rechts, um Spieler hinzuzufügen.</p>}
-        </div>
-      )}
-
-      {/* --- Player List Rendering --- */}
-      {playerGroups.map((group) => (
-        <div key={group.player.id} className="bg-base-100/50 rounded-xl p-6 border border-amber-900/10">
-          <div className="flex items-center gap-4 mb-6 pb-4 border-b border-amber-500/20">
-            <div className="avatar placeholder">
-              <div className="bg-neutral text-neutral-content rounded-full w-12 h-12 ring ring-amber-500/40 ring-offset-2 ring-offset-base-100">
-                {group.player.avatar_url ? (
-                  <img src={group.player.avatar_url} alt={group.player.username} />
-                ) : (
-                  <span className="text-lg">{group.player.username?.substring(0, 1).toUpperCase()}</span>
-                )}
-              </div>
-            </div>
-            <div>
-              <h2 className="text-2xl font-serif text-amber-100">{group.player.username}</h2>
-              <span className="text-xs text-amber-200/50 uppercase tracking-widest">
-                {group.characters.length} {group.characters.length === 1 ? 'Charakter' : 'Charaktere'}
-              </span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {group.characters.map((char) => (
-              <div key={char.id} className={`card bg-base-100 shadow-xl border-2 transition-all duration-300 hover:scale-[1.02] ${char.alive ? 'border-amber-900/30' : 'border-gray-700 grayscale opacity-70'}`}>
-                <div className="card-body p-5">
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <h3 className="card-title text-amber-100 text-xl font-serif tracking-wide">{char.name}</h3>
-                      <p className="text-xs text-amber-500 uppercase font-bold tracking-widest mt-1">
-                        {char.race} • {char.profession} • Lvl {char.level}
-                      </p>
-                    </div>
-                    {!char.alive && <span className="badge badge-ghost text-xs">† Gefallen</span>}
-                  </div>
-                  <div className="divider my-1 bg-amber-900/20 h-px"></div>
-                  {char.stats && (
-                    <div className="grid grid-cols-5 gap-2 my-3 bg-black/20 p-2 rounded-lg">
-                      {Object.entries(char.stats).map(([key, value]) => (
-                        <div key={key} className="flex flex-col items-center">
-                          <span className="text-[10px] text-gray-400 uppercase">{key}</span>
-                          <span className="font-bold text-amber-300">{value}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {char.background && (
-                    <div className="text-sm text-gray-400 italic mt-2 line-clamp-3 font-serif">"{char.background}"</div>
-                  )}
+        {isGamemaster && (
+          <div>
+            {!isAddingPlayer ? (
+              <button 
+                onClick={() => setIsAddingPlayer(true)}
+                className="text-xs text-amber-500 hover:text-amber-300 transition-colors flex items-center gap-1"
+              >
+                + Spieler einladen
+              </button>
+            ) : (
+              <div className="flex flex-col items-end gap-2 animate-in fade-in slide-in-from-right-4">
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    placeholder="Username..." 
+                    className="input input-xs input-bordered border-amber-900/50 bg-black/20 text-white w-32"
+                    value={newPlayerName}
+                    onChange={(e) => setNewPlayerName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddPlayer()}
+                  />
+                  <button onClick={handleAddPlayer} className="btn btn-xs bg-amber-700 hover:bg-amber-600 border-none text-white">Add</button>
+                  <button onClick={() => setIsAddingPlayer(false)} className="btn btn-xs btn-ghost text-gray-500">✕</button>
                 </div>
+                {addPlayerError && <span className="text-red-500 text-[10px]">{addPlayerError}</span>}
+                {addPlayerSuccess && <span className="text-green-500 text-[10px]">{addPlayerSuccess}</span>}
               </div>
-            ))}
+            )}
           </div>
-        </div>
-      ))}
+        )}
+      </div>
+
+      {/* --- PLAYER GRID (Compact View) --- */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        
+        {playerGroups.map((group) => (
+          <div key={group.player.id} className="bg-[#0f0f0f] rounded-lg border border-amber-900/20 overflow-hidden flex flex-col shadow-lg shadow-black/40">
+            
+            {/* Player Header */}
+            <div className="bg-gradient-to-r from-amber-950/20 to-transparent p-3 border-b border-amber-900/10 flex items-center gap-3">
+               <div className="avatar placeholder">
+                  <div className="bg-neutral text-neutral-content rounded-full w-8 h-8 ring-1 ring-amber-600/30">
+                    <span className="text-xs">{group.player.username.substring(0, 1).toUpperCase()}</span>
+                  </div>
+               </div>
+               <span className="font-serif text-amber-100/90 text-lg tracking-wide truncate">
+                 {group.player.username}
+               </span>
+            </div>
+
+            {/* Character List */}
+            <div className="p-3 space-y-2 flex-1">
+              {group.characters.length === 0 && (
+                <div className="text-center py-4 text-xs text-gray-600 italic">Keine Charaktere</div>
+              )}
+
+              {group.characters.map((char) => (
+                <div 
+                  key={char.id} 
+                  className={`relative group flex items-center justify-between gap-3 bg-white/5 border ${char.alive ? 'border-transparent hover:border-amber-500/20' : 'border-red-900/20 opacity-60'} rounded p-2 transition-all`}
+                >
+                    {/* Status Stripe */}
+                    <div className={`w-1 self-stretch rounded-full ${char.alive ? 'bg-amber-600/40' : 'bg-red-900'}`}></div>
+
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                           <span className={`font-bold text-sm truncate ${char.alive ? 'text-amber-50' : 'text-red-400 line-through decoration-red-900'}`}>
+                             {char.name}
+                           </span>
+                           {!char.alive && <span className="text-[9px] border border-red-900 text-red-600 px-1 rounded bg-black">TOT</span>}
+                        </div>
+                        <div className="text-[10px] text-gray-500 truncate mt-0.5 uppercase tracking-wide">
+                            Lvl {char.level} • {char.profession} • {char.race}
+                        </div>
+                    </div>
+
+                    {/* Details Button */}
+                    <button 
+                      onClick={() => setSelectedCharacter(char)}
+                      className="btn btn-xs btn-ghost text-gray-500 hover:text-amber-400 hover:bg-amber-900/10"
+                      title="Charakterbogen öffnen"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+
+        {playerGroups.length === 0 && !isLoading && (
+            <div className="col-span-full text-center py-12 text-gray-500 italic">
+                Noch keine Spieler in dieser Runde.
+            </div>
+        )}
+      </div>
+
+      {/* --- MODAL --- */}
+      {selectedCharacter && (
+        <CharacterSheetModal 
+          character={selectedCharacter} 
+          onClose={() => setSelectedCharacter(null)} 
+        />
+      )}
     </div>
   );
 }

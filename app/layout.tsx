@@ -41,7 +41,11 @@ export default function RootLayout({
         <SessionContextProvider supabaseClient={supabaseClient}>
           <AuthProvider>
             <Header />
-            <main>
+            {/* HIER DIE ÄNDERUNG:
+                pt-16 (64px) = Exakte Höhe des Headers
+                min-h-screen = Damit der Footer (falls später einer kommt) unten bleibt
+            */}
+            <main className="pt-16 min-h-screen">
               {children}
             </main>
           </AuthProvider>
