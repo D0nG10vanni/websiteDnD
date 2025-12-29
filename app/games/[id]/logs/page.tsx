@@ -174,7 +174,12 @@ export default function CombinedPage() {
         case 'articles': case 'browser': return (<div className="h-full w-full overflow-y-auto bg-[#1a1a1a] custom-scrollbar"><ArticleBrowser articles={articles} gameId={gameId} isLoading={isLoading} onDeleteArticle={handleDeleteArticle} onAddArticle={handleAddArticle} onUpdateArticle={handleUpdateArticle} /></div>);
         case 'timeline': return <Timeline gameId={gameId} />;
         case 'story': return <StoryBuilder gameId={gameId} />;
-        case 'timer': return <div className="h-full w-full bg-[#2a2a2a] flex items-center justify-center"><TimeTracker /></div>;
+        case 'timer':
+          return (
+            <div className="h-full w-full bg-[#2a2a2a] flex items-center justify-center">
+              <TimeTracker gameId={gameId} />
+            </div>
+          );
         default: return null;
     }
   };

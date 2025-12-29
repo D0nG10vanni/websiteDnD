@@ -1,434 +1,337 @@
-import React, { useState, useCallback } from 'react';
-import { Clock, Plus, RotateCcw, Calendar } from 'lucide-react';
+'use client';
 
-const TimeTracker = () => {
-  // Startkonfiguration: 23. Mai 1337, 08:00 Uhr
-  const INITIAL_DATE = new Date(1337, 4, 23, 8, 0);
-  
-  const [gameDate, setGameDate] = useState(INITIAL_DATE);
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Clock, Plus, RotateCcw, Calendar, Moon, Sun, Sunrise, Sunset } from 'lucide-react';
+import { useSupabaseClient } from '@supabase/auth-helpers-react';
+
+// ------------------------------------------------------------
+// Konfiguration
+// ------------------------------------------------------------
+const CLOCK_TABLE = 'ingame_clock';
+const CLOCK_TIME_COL = 'ingame_timestamp';
+const CLOCK_GAME_ID_COL = 'game_id';
+
+// Ingame Startzeit (UTC)
+const INITIAL_ISO = '1337-05-23T08:00:00.000Z';
+
+type TimeTrackerProps = {
+  gameId: number;
+};
+
+const TimeTracker: React.FC<TimeTrackerProps> = ({ gameId }) => {
+  const supabase = useSupabaseClient();
+
+  // ✅ STABIL: verhindert useEffect loops
+  const INITIAL_DATE = useMemo(() => new Date(INITIAL_ISO), []);
+
+  const [gameDate, setGameDate] = useState<Date>(INITIAL_DATE);
   const [hours, setHours] = useState('');
   const [minutes, setMinutes] = useState('');
   const [isEditingDate, setIsEditingDate] = useState(false);
-  
-  // Separate Felder für Datum-Bearbeitung
+
+  const [isLoadingClock, setIsLoadingClock] = useState(true);
+  const [isSavingClock, setIsSavingClock] = useState(false);
+
+  // Edit Fields (für UTC)
   const [editYear, setEditYear] = useState('');
   const [editMonth, setEditMonth] = useState('');
   const [editDay, setEditDay] = useState('');
   const [editHour, setEditHour] = useState('');
   const [editMinute, setEditMinute] = useState('');
 
-  // Zeit-Presets für häufige Aktionen
-  const TIME_PRESETS = [
-    { label: 'Untersuchen', hours: 0, minutes: 10, icon: '🔍' },
-    { label: 'Kurze Rast', hours: 1, minutes: 0, icon: '☕' },
-    { label: 'Halber Tag', hours: 4, minutes: 0, icon: '🚶' },
-    { label: 'Lange Rast', hours: 8, minutes: 0, icon: '🛌' },
-    { label: 'Ganzer Tag', hours: 24, minutes: 0, icon: '🌅' },
-    { label: 'Woche', hours: 168, minutes: 0, icon: '📅' },
-  ];
+  // Presets
+  const TIME_PRESETS = useMemo(
+    () => [
+      { label: 'Untersuchen', hours: 0, minutes: 10, icon: <Clock size={18} /> },
+      { label: 'Kurze Rast', hours: 1, minutes: 0, icon: <CoffeeCupIcon /> },
+      { label: 'Halber Tag', hours: 4, minutes: 0, icon: <Sun size={18} /> },
+      { label: 'Lange Rast', hours: 8, minutes: 0, icon: <Moon size={18} /> },
+      { label: 'Ganzer Tag', hours: 24, minutes: 0, icon: <Sunrise size={18} /> },
+      { label: 'Woche', hours: 168, minutes: 0, icon: <Calendar size={18} /> },
+    ],
+    []
+  );
 
-  // Zeit vorwärts bewegen
-  const advanceTime = useCallback((hoursToAdd: number, minutesToAdd: number) => {
-    setGameDate(prevDate => {
-      const newDate = new Date(prevDate);
-      newDate.setHours(newDate.getHours() + hoursToAdd);
-      newDate.setMinutes(newDate.getMinutes() + minutesToAdd);
-      return newDate;
-    });
-  }, []);
+  // ---------------------------------------------
+  // DB helpers
+  // ---------------------------------------------
+  const fetchClock = useCallback(async () => {
+    // Prefer maybeSingle if available in your supabase client version
+    const base = supabase
+      .from(CLOCK_TABLE)
+      .select(CLOCK_TIME_COL)
+      .eq(CLOCK_GAME_ID_COL, gameId)
+      .limit(1);
 
-  // Handler für manuelle Zeitaddition
+    const maybeSingleFn = (base as any).maybeSingle;
+    if (typeof maybeSingleFn === 'function') {
+      return await (base as any).maybeSingle();
+    }
+
+    // Fallback: single() (kann bei "no rows" werfen/err)
+    return await base.single();
+  }, [supabase, gameId]);
+
+  const upsertClock = useCallback(
+    async (date: Date) => {
+      return await supabase
+        .from(CLOCK_TABLE)
+        .upsert(
+          {
+            [CLOCK_GAME_ID_COL]: gameId,
+            [CLOCK_TIME_COL]: date.toISOString(),
+          } as any,
+          { onConflict: CLOCK_GAME_ID_COL as any }
+        );
+    },
+    [supabase, gameId]
+  );
+
+  // ---------------------------------------------
+  // Load Clock
+  // ---------------------------------------------
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      // ✅ WICHTIG: wenn gameId fehlt, NICHT ewig laden
+      if (!gameId || Number.isNaN(gameId)) {
+        setIsLoadingClock(false);
+        return;
+      }
+
+      setIsLoadingClock(true);
+
+      try {
+        const { data, error } = await fetchClock();
+
+        if (cancelled) return;
+
+        const ts = data?.[CLOCK_TIME_COL as keyof typeof data] as unknown as string | undefined;
+
+        if (!error && ts) {
+          setGameDate(new Date(ts));
+        } else {
+          // Keine Zeile / Fehler -> initial setzen + upsert versuchen
+          setGameDate(INITIAL_DATE);
+          await upsertClock(INITIAL_DATE);
+        }
+      } catch {
+        if (cancelled) return;
+        setGameDate(INITIAL_DATE);
+        // optional: upsert versuchen
+        try {
+          await upsertClock(INITIAL_DATE);
+        } catch {
+          // ignore
+        }
+      } finally {
+        if (!cancelled) setIsLoadingClock(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [gameId, fetchClock, upsertClock, INITIAL_DATE]);
+
+  // ---------------------------------------------
+  // Persist (manuell aufgerufen bei Änderungen)
+  // ---------------------------------------------
+  const persistGameDate = useCallback(
+    async (date: Date) => {
+      if (!gameId || Number.isNaN(gameId)) return;
+
+      setIsSavingClock(true);
+      try {
+        const { error } = await upsertClock(date);
+        if (error) console.error('Failed to persist ingame clock:', error);
+      } finally {
+        setIsSavingClock(false);
+      }
+    },
+    [gameId, upsertClock]
+  );
+
+  // ---------------------------------------------
+  // Logik: alles in UTC rechnen
+  // ---------------------------------------------
+  const advanceTime = useCallback(
+    (hoursToAdd: number, minutesToAdd: number) => {
+      const newDate = new Date(gameDate);
+      newDate.setUTCHours(newDate.getUTCHours() + hoursToAdd);
+      newDate.setUTCMinutes(newDate.getUTCMinutes() + minutesToAdd);
+      setGameDate(newDate);
+      void persistGameDate(newDate);
+    },
+    [gameDate, persistGameDate]
+  );
+
   const handleManualAdd = useCallback(() => {
-    const h = parseInt(hours) || 0;
-    const m = parseInt(minutes) || 0;
-    
+    const h = parseInt(hours, 10) || 0;
+    const m = parseInt(minutes, 10) || 0;
     if (h === 0 && m === 0) return;
-    
+
     advanceTime(h, m);
     setHours('');
     setMinutes('');
   }, [hours, minutes, advanceTime]);
 
-  // Enter-Taste Handler
-  const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleManualAdd();
-    }
-  }, [handleManualAdd]);
+  const handleKeyPress = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') handleManualAdd();
+    },
+    [handleManualAdd]
+  );
 
-  // Datum-Bearbeitungsmodus starten
   const startEditingDate = useCallback(() => {
-    setEditYear(gameDate.getFullYear().toString());
-    setEditMonth((gameDate.getMonth() + 1).toString());
-    setEditDay(gameDate.getDate().toString());
-    setEditHour(gameDate.getHours().toString());
-    setEditMinute(gameDate.getMinutes().toString());
+    // UTC values
+    setEditYear(gameDate.getUTCFullYear().toString());
+    setEditMonth((gameDate.getUTCMonth() + 1).toString());
+    setEditDay(gameDate.getUTCDate().toString());
+    setEditHour(gameDate.getUTCHours().toString());
+    setEditMinute(gameDate.getUTCMinutes().toString());
     setIsEditingDate(true);
   }, [gameDate]);
 
-  // Datum speichern
   const saveDateEdit = useCallback(() => {
-    const year = parseInt(editYear) || 1337;
-    const month = (parseInt(editMonth) || 1) - 1; // 0-basiert
-    const day = parseInt(editDay) || 1;
-    const hour = parseInt(editHour) || 0;
-    const minute = parseInt(editMinute) || 0;
-    
-    const newDate = new Date(year, month, day, hour, minute);
+    const year = parseInt(editYear, 10) || 1337;
+    const month = (parseInt(editMonth, 10) || 1) - 1; // 0-based
+    const day = parseInt(editDay, 10) || 1;
+    const hour = parseInt(editHour, 10) || 0;
+    const minute = parseInt(editMinute, 10) || 0;
+
+    const ms = Date.UTC(year, month, day, hour, minute, 0, 0);
+    const newDate = new Date(ms);
+
     setGameDate(newDate);
     setIsEditingDate(false);
-  }, [editYear, editMonth, editDay, editHour, editMinute]);
+    void persistGameDate(newDate);
+  }, [editYear, editMonth, editDay, editHour, editMinute, persistGameDate]);
 
-  // Datum-Bearbeitung abbrechen
-  const cancelDateEdit = useCallback(() => {
-    setIsEditingDate(false);
-  }, []);
+  const cancelDateEdit = useCallback(() => setIsEditingDate(false), []);
 
-  // Reset zur Startzeit
   const resetTime = useCallback(() => {
     setGameDate(INITIAL_DATE);
     setHours('');
     setMinutes('');
-  }, []);
+    void persistGameDate(INITIAL_DATE);
+  }, [INITIAL_DATE, persistGameDate]);
 
-  // Formatierung
-  const formatDate = (date: Date) => {
-    return new Intl.DateTimeFormat('de-DE', {
+  // ---------------------------------------------
+  // Formatter: fix UTC, damit es “Ingame” bleibt
+  // ---------------------------------------------
+  const formatDate = (date: Date) =>
+    new Intl.DateTimeFormat('de-DE', {
+      timeZone: 'UTC',
       weekday: 'long',
       day: 'numeric',
       month: 'long',
       year: 'numeric',
     }).format(date);
-  };
 
-  const formatTime = (date: Date) => {
-    return new Intl.DateTimeFormat('de-DE', {
+  const formatTime = (date: Date) =>
+    new Intl.DateTimeFormat('de-DE', {
+      timeZone: 'UTC',
       hour: '2-digit',
       minute: '2-digit',
     }).format(date);
-  };
 
-  // Tageszeit-Indikator
   const getTimeOfDay = (date: Date) => {
-    const hour = date.getHours();
-    if (hour >= 5 && hour < 12) return { label: 'Morgen', emoji: '🌅' };
-    if (hour >= 12 && hour < 17) return { label: 'Nachmittag', emoji: '☀️' };
-    if (hour >= 17 && hour < 21) return { label: 'Abend', emoji: '🌆' };
-    return { label: 'Nacht', emoji: '🌙' };
+    const hour = date.getUTCHours();
+    if (hour >= 5 && hour < 12) return { label: 'Morgen', icon: <Sunrise className="text-[var(--accent)]" /> };
+    if (hour >= 12 && hour < 17) return { label: 'Nachmittag', icon: <Sun className="text-[var(--accent)]" /> };
+    if (hour >= 17 && hour < 21) return { label: 'Abend', icon: <Sunset className="text-[var(--primary)]" /> };
+    return { label: 'Nacht', icon: <Moon className="text-[var(--foreground-muted)]" /> };
   };
 
   const timeOfDay = getTimeOfDay(gameDate);
 
+  // ---------------------------------------------
+  // UI
+  // ---------------------------------------------
+  if (isLoadingClock) {
+    return (
+      <div className="flex h-full w-full items-center justify-center rounded-lg border border-[hsla(30,50%,50%,0.3)] bg-[var(--background-secondary)] p-6 text-[var(--foreground)] animate-pulse">
+        <span className="font-[var(--font-serif)]">Lade Zeit…</span>
+      </div>
+    );
+  }
+
   return (
-    <div style={{
-      width: '100%',
-      height: '100%',
-      display: 'flex',
-      flexDirection: 'column',
-      fontFamily: 'var(--font-geist-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif)',
-      padding: '1.5rem',
-      boxSizing: 'border-box',
-      background: 'var(--background-secondary)',
-      color: 'var(--foreground)',
-      overflow: 'auto',
-      borderRadius: '8px',
-      border: '1px solid hsla(30, 50%, 50%, 0.3)'
-    }}>
+    <div className="flex h-full w-full flex-col gap-4 overflow-y-auto rounded-lg border border-[hsla(30,50%,50%,0.3)] bg-[var(--background-secondary)] p-6 text-[var(--foreground)]">
       {/* Header */}
-      <div style={{ 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'space-between',
-        marginBottom: '1.5rem',
-        borderBottom: '2px solid var(--accent)',
-        paddingBottom: '0.75rem'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <Clock size={24} style={{ color: 'var(--accent)' }} />
-          <h2 style={{ 
-            margin: 0, 
-            fontSize: '1.5rem', 
-            fontWeight: '600',
-            fontFamily: 'var(--font-serif, Cinzel, serif)',
-            color: 'var(--accent)',
-            textShadow: 'var(--glow-warm)'
-          }}>
-            Kampagnen-Zeit
-          </h2>
+      <div className="flex items-center justify-between border-b border-[hsla(30,50%,50%,0.3)] pb-3">
+        <div className="flex items-center gap-3">
+          <Clock className="text-[var(--accent)]" />
+          <div className="flex flex-col leading-tight">
+            <span className="font-[var(--font-serif)] text-lg text-[var(--accent)]">Kampagnen-Zeit</span>
+            {isSavingClock ? (
+              <span className="text-xs text-[var(--foreground-muted)]">speichert…</span>
+            ) : (
+              <span className="text-xs text-[var(--foreground-muted)]">UTC-Ingame-Zeit</span>
+            )}
+          </div>
         </div>
+
         <button
           onClick={resetTime}
-          style={{
-            background: 'hsla(30, 50%, 50%, 0.2)',
-            border: '1px solid hsla(30, 50%, 50%, 0.3)',
-            borderRadius: '8px',
-            padding: '0.5rem',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.25rem',
-            color: 'var(--foreground)',
-            fontSize: '0.875rem',
-            transition: 'all 0.2s'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'hsla(30, 50%, 50%, 0.3)';
-            e.currentTarget.style.boxShadow = 'var(--shadow-ember)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'hsla(30, 50%, 50%, 0.2)';
-            e.currentTarget.style.boxShadow = 'none';
-          }}
+          className="btn btn-sm bg-[hsla(30,50%,50%,0.15)] border border-[hsla(30,50%,50%,0.3)] text-[var(--foreground)] hover:bg-[hsla(30,50%,50%,0.25)]"
           title="Zur Startzeit zurücksetzen"
         >
           <RotateCcw size={16} />
         </button>
       </div>
 
-      {/* Zeit-Anzeige */}
+      {/* Anzeige / Edit */}
       {!isEditingDate ? (
-        <div 
+        <button
           onClick={startEditingDate}
-          style={{
-            background: 'var(--background)',
-            borderRadius: '12px',
-            padding: '1.5rem',
-            marginBottom: '1.5rem',
-            boxShadow: 'var(--shadow-deep)',
-            color: 'var(--foreground)',
-            border: '1px solid hsla(30, 50%, 50%, 0.3)',
-            cursor: 'pointer',
-            transition: 'all 0.2s'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.boxShadow = 'var(--shadow-ember)';
-            e.currentTarget.style.transform = 'translateY(-2px)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.boxShadow = 'var(--shadow-deep)';
-            e.currentTarget.style.transform = 'translateY(0)';
-          }}
+          className="group w-full rounded-xl border border-[hsla(30,50%,50%,0.3)] bg-[var(--background)] p-5 text-left shadow-[var(--shadow-deep)] hover:shadow-[var(--shadow-ember)] transition"
         >
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '0.5rem',
-            marginBottom: '0.75rem',
-            fontSize: '0.875rem',
-            fontWeight: '500',
-            color: 'var(--accent)'
-          }}>
-            <span>{timeOfDay.emoji}</span>
-            <span>{timeOfDay.label}</span>
+          <div className="mb-2 flex items-center justify-center gap-2 text-sm text-[var(--accent)]">
+            <span className="inline-flex items-center">{timeOfDay.icon}</span>
+            <span className="font-medium">{timeOfDay.label}</span>
           </div>
-          
-          <div style={{
-            textAlign: 'center',
-            fontSize: '3rem',
-            fontWeight: '700',
-            lineHeight: '1',
-            marginBottom: '0.5rem',
-            color: 'var(--accent)',
-            fontFamily: 'var(--font-mono, monospace)',
-            textShadow: 'var(--glow-warm)'
-          }}>
+
+          <div className="text-center font-[var(--font-mono)] text-5xl font-bold text-[var(--accent)] drop-shadow-[var(--glow-warm)]">
             {formatTime(gameDate)}
           </div>
-          
-          <div style={{
-            textAlign: 'center',
-            fontSize: '1rem',
-            color: 'var(--foreground-muted)',
-            fontWeight: '500',
-            fontFamily: 'var(--font-serif, serif)'
-          }}>
+
+          <div className="mt-2 text-center font-[var(--font-serif)] text-sm text-[var(--foreground-muted)]">
             {formatDate(gameDate)}
           </div>
 
-          <div style={{
-            textAlign: 'center',
-            fontSize: '0.75rem',
-            color: 'var(--foreground-muted)',
-            marginTop: '0.5rem',
-            opacity: 0.7,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '0.25rem'
-          }}>
-            <Calendar size={12} />
-            <span>Klicken zum Bearbeiten</span>
+          <div className="mt-3 flex items-center justify-center gap-2 text-xs text-[var(--foreground-muted)] opacity-80">
+            <Calendar size={14} />
+            <span>klicken zum Bearbeiten</span>
           </div>
-        </div>
+        </button>
       ) : (
-        <div style={{
-          background: 'var(--background)',
-          borderRadius: '12px',
-          padding: '1.5rem',
-          marginBottom: '1.5rem',
-          boxShadow: 'var(--shadow-ember)',
-          border: '2px solid var(--primary)'
-        }}>
-          <div style={{ marginBottom: '1rem', fontSize: '0.875rem', fontWeight: '500', color: 'var(--accent)' }}>
-            Datum & Zeit bearbeiten
-          </div>
-          
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem', marginBottom: '1rem' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', marginBottom: '0.25rem', color: 'var(--foreground-muted)' }}>
-                Tag
-              </label>
-              <input
-                type="number"
-                value={editDay}
-                onChange={(e) => setEditDay(e.target.value)}
-                min="1"
-                max="31"
-                style={{
-                  width: '100%',
-                  padding: '0.5rem',
-                  borderRadius: '6px',
-                  border: '1px solid hsla(30, 50%, 50%, 0.3)',
-                  background: 'var(--background-secondary)',
-                  color: 'var(--foreground)',
-                  fontSize: '0.875rem'
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', marginBottom: '0.25rem', color: 'var(--foreground-muted)' }}>
-                Monat
-              </label>
-              <input
-                type="number"
-                value={editMonth}
-                onChange={(e) => setEditMonth(e.target.value)}
-                min="1"
-                max="12"
-                style={{
-                  width: '100%',
-                  padding: '0.5rem',
-                  borderRadius: '6px',
-                  border: '1px solid hsla(30, 50%, 50%, 0.3)',
-                  background: 'var(--background-secondary)',
-                  color: 'var(--foreground)',
-                  fontSize: '0.875rem'
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', marginBottom: '0.25rem', color: 'var(--foreground-muted)' }}>
-                Jahr
-              </label>
-              <input
-                type="number"
-                value={editYear}
-                onChange={(e) => setEditYear(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '0.5rem',
-                  borderRadius: '6px',
-                  border: '1px solid hsla(30, 50%, 50%, 0.3)',
-                  background: 'var(--background-secondary)',
-                  color: 'var(--foreground)',
-                  fontSize: '0.875rem'
-                }}
-              />
-            </div>
+        <div className="rounded-xl border border-[hsla(30,50%,50%,0.3)] bg-[var(--background)] p-5 shadow-[var(--shadow-ember)]">
+          <div className="mb-3 text-sm font-medium text-[var(--accent)]">Datum & Zeit bearbeiten (UTC)</div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <DateInput label="Tag" value={editDay} onChange={setEditDay} max={31} />
+            <DateInput label="Monat" value={editMonth} onChange={setEditMonth} max={12} />
+            <DateInput label="Jahr" value={editYear} onChange={setEditYear} max={9999} />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '1rem' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', marginBottom: '0.25rem', color: 'var(--foreground-muted)' }}>
-                Stunde
-              </label>
-              <input
-                type="number"
-                value={editHour}
-                onChange={(e) => setEditHour(e.target.value)}
-                min="0"
-                max="23"
-                style={{
-                  width: '100%',
-                  padding: '0.5rem',
-                  borderRadius: '6px',
-                  border: '1px solid hsla(30, 50%, 50%, 0.3)',
-                  background: 'var(--background-secondary)',
-                  color: 'var(--foreground)',
-                  fontSize: '0.875rem'
-                }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', marginBottom: '0.25rem', color: 'var(--foreground-muted)' }}>
-                Minute
-              </label>
-              <input
-                type="number"
-                value={editMinute}
-                onChange={(e) => setEditMinute(e.target.value)}
-                min="0"
-                max="59"
-                style={{
-                  width: '100%',
-                  padding: '0.5rem',
-                  borderRadius: '6px',
-                  border: '1px solid hsla(30, 50%, 50%, 0.3)',
-                  background: 'var(--background-secondary)',
-                  color: 'var(--foreground)',
-                  fontSize: '0.875rem'
-                }}
-              />
-            </div>
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <DateInput label="Stunde" value={editHour} onChange={setEditHour} max={23} />
+            <DateInput label="Minute" value={editMinute} onChange={setEditMinute} max={59} />
           </div>
 
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <div className="mt-4 flex gap-3">
             <button
               onClick={saveDateEdit}
-              style={{
-                flex: 1,
-                padding: '0.625rem',
-                borderRadius: '8px',
-                border: 'none',
-                background: 'var(--primary)',
-                color: 'var(--background)',
-                fontSize: '0.875rem',
-                fontWeight: '600',
-                cursor: 'pointer',
-                transition: 'all 0.2s'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'var(--primary-dark)';
-                e.currentTarget.style.boxShadow = 'var(--glow-warm)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'var(--primary)';
-                e.currentTarget.style.boxShadow = 'none';
-              }}
+              className="btn btn-sm flex-1 bg-[var(--primary)] text-[var(--background)] hover:bg-[var(--primary-dark)] border-none"
             >
               Speichern
             </button>
             <button
               onClick={cancelDateEdit}
-              style={{
-                flex: 1,
-                padding: '0.625rem',
-                borderRadius: '8px',
-                border: '1px solid hsla(30, 50%, 50%, 0.3)',
-                background: 'transparent',
-                color: 'var(--foreground)',
-                fontSize: '0.875rem',
-                fontWeight: '600',
-                cursor: 'pointer',
-                transition: 'all 0.2s'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'hsla(30, 50%, 50%, 0.1)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'transparent';
-              }}
+              className="btn btn-sm flex-1 bg-transparent border border-[hsla(30,50%,50%,0.3)] text-[var(--foreground)] hover:bg-[hsla(30,50%,50%,0.1)]"
             >
               Abbrechen
             </button>
@@ -436,172 +339,115 @@ const TimeTracker = () => {
         </div>
       )}
 
-      {/* Schnell-Aktionen */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-        gap: '0.75rem',
-        marginBottom: '1.5rem'
-      }}>
-        {TIME_PRESETS.map((preset) => (
+      {/* Presets */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+        {TIME_PRESETS.map((p) => (
           <button
-            key={preset.label}
-            onClick={() => advanceTime(preset.hours, preset.minutes)}
-            style={{
-              background: 'hsla(30, 50%, 50%, 0.15)',
-              backdropFilter: 'blur(10px)',
-              border: '1px solid hsla(30, 50%, 50%, 0.3)',
-              borderRadius: '12px',
-              padding: '0.875rem 0.75rem',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-              color: 'var(--foreground)',
-              fontSize: '0.875rem',
-              fontWeight: '500',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: '0.25rem'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'hsla(30, 50%, 50%, 0.25)';
-              e.currentTarget.style.transform = 'translateY(-2px)';
-              e.currentTarget.style.boxShadow = 'var(--shadow-ember)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'hsla(30, 50%, 50%, 0.15)';
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = 'none';
-            }}
+            key={p.label}
+            onClick={() => advanceTime(p.hours, p.minutes)}
+            className="btn btn-sm h-auto flex flex-col gap-2 rounded-xl border border-[hsla(30,50%,50%,0.3)] bg-[hsla(30,50%,50%,0.12)] text-[var(--foreground)] hover:bg-[hsla(30,50%,50%,0.22)]"
           >
-            <span style={{ fontSize: '1.5rem' }}>{preset.icon}</span>
-            <span>{preset.label}</span>
-            <span style={{ fontSize: '0.75rem', opacity: 0.8, color: 'var(--foreground-muted)' }}>
-              +{preset.hours > 0 ? `${preset.hours}h` : ''}{preset.hours > 0 && preset.minutes > 0 ? ' ' : ''}{preset.minutes > 0 ? `${preset.minutes}min` : ''}
+            <span className="text-[var(--accent)]">{p.icon}</span>
+            <span className="text-xs font-medium">{p.label}</span>
+            <span className="text-[10px] text-[var(--foreground-muted)]">
+              +{p.hours ? `${p.hours}h` : ''}{p.hours && p.minutes ? ' ' : ''}{p.minutes ? `${p.minutes}m` : ''}
             </span>
           </button>
         ))}
       </div>
 
-      {/* Manuelle Eingabe */}
-      <div style={{
-        background: 'hsla(30, 50%, 50%, 0.1)',
-        backdropFilter: 'blur(10px)',
-        border: '1px solid hsla(30, 50%, 50%, 0.3)',
-        borderRadius: '12px',
-        padding: '1.25rem'
-      }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.5rem',
-          marginBottom: '0.75rem',
-          fontSize: '0.875rem',
-          fontWeight: '500',
-          color: 'var(--accent)'
-        }}>
+      {/* Manual Add */}
+      <div className="rounded-xl border border-[hsla(30,50%,50%,0.3)] bg-[hsla(30,50%,50%,0.08)] p-5">
+        <div className="mb-3 flex items-center gap-2 text-sm font-medium text-[var(--accent)]">
           <Plus size={16} />
           <span>Benutzerdefiniert</span>
         </div>
-        
-        <div style={{
-          display: 'flex',
-          gap: '0.75rem',
-          alignItems: 'flex-end'
-        }}>
-          <div style={{ flex: 1 }}>
-            <label style={{
-              display: 'block',
-              fontSize: '0.75rem',
-              marginBottom: '0.25rem',
-              color: 'var(--foreground-muted)'
-            }}>
-              Stunden
-            </label>
+
+        <div className="flex items-end gap-3">
+          <div className="flex-1">
+            <label className="mb-1 block text-xs text-[var(--foreground-muted)]">Std</label>
             <input
               type="number"
               value={hours}
               onChange={(e) => setHours(e.target.value)}
-              onKeyPress={handleKeyPress}
+              onKeyDown={handleKeyPress}
               placeholder="0"
               min="0"
-              style={{
-                width: '100%',
-                padding: '0.625rem',
-                borderRadius: '8px',
-                border: '1px solid hsla(30, 50%, 50%, 0.3)',
-                background: 'var(--background-secondary)',
-                fontSize: '1rem',
-                color: 'var(--foreground)',
-                boxSizing: 'border-box'
-              }}
+              className="input input-bordered input-sm w-full bg-[var(--background)] text-[var(--foreground)] border-[hsla(30,50%,50%,0.3)] focus:border-[var(--accent)] focus:outline-none text-center"
             />
           </div>
-          
-          <div style={{ flex: 1 }}>
-            <label style={{
-              display: 'block',
-              fontSize: '0.75rem',
-              marginBottom: '0.25rem',
-              color: 'var(--foreground-muted)'
-            }}>
-              Minuten
-            </label>
+
+          <div className="flex-1">
+            <label className="mb-1 block text-xs text-[var(--foreground-muted)]">Min</label>
             <input
               type="number"
               value={minutes}
               onChange={(e) => setMinutes(e.target.value)}
-              onKeyPress={handleKeyPress}
+              onKeyDown={handleKeyPress}
               placeholder="0"
               min="0"
-              style={{
-                width: '100%',
-                padding: '0.625rem',
-                borderRadius: '8px',
-                border: '1px solid hsla(30, 50%, 50%, 0.3)',
-                background: 'var(--background-secondary)',
-                fontSize: '1rem',
-                color: 'var(--foreground)',
-                boxSizing: 'border-box'
-              }}
+              className="input input-bordered input-sm w-full bg-[var(--background)] text-[var(--foreground)] border-[hsla(30,50%,50%,0.3)] focus:border-[var(--accent)] focus:outline-none text-center"
             />
           </div>
-          
+
           <button
             onClick={handleManualAdd}
             disabled={!hours && !minutes}
-            style={{
-              padding: '0.625rem 1.5rem',
-              borderRadius: '8px',
-              border: 'none',
-              background: (!hours && !minutes) ? 'hsla(30, 50%, 50%, 0.2)' : 'var(--primary)',
-              color: (!hours && !minutes) ? 'var(--foreground-muted)' : 'var(--background)',
-              fontSize: '1rem',
-              fontWeight: '600',
-              cursor: (!hours && !minutes) ? 'not-allowed' : 'pointer',
-              transition: 'all 0.2s',
-              whiteSpace: 'nowrap',
-              opacity: (!hours && !minutes) ? 0.5 : 1
-            }}
-            onMouseEnter={(e) => {
-              if (hours || minutes) {
-                e.currentTarget.style.background = 'var(--primary-dark)';
-                e.currentTarget.style.transform = 'translateY(-1px)';
-                e.currentTarget.style.boxShadow = 'var(--glow-warm)';
-              }
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = (!hours && !minutes) ? 'hsla(30, 50%, 50%, 0.2)' : 'var(--primary)';
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = 'none';
-            }}
+            className={`btn btn-sm ${(!hours && !minutes) ? 'btn-disabled opacity-50' : 'btn-primary text-[var(--background)]'}`}
           >
-            Hinzufügen
+            Go
           </button>
         </div>
       </div>
     </div>
   );
 };
+
+// ------------------------------------------------------------
+// Kleine Helfer
+// ------------------------------------------------------------
+const DateInput = ({
+  label,
+  value,
+  onChange,
+  max,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  max: number;
+}) => (
+  <div>
+    <label className="mb-1 block text-xs text-[var(--foreground-muted)]">{label}</label>
+    <input
+      type="number"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      min="0"
+      max={max}
+      className="input input-bordered input-sm w-full bg-[var(--background-secondary)] text-[var(--foreground)] border-[hsla(30,50%,50%,0.3)] focus:border-[var(--accent)] focus:outline-none text-center"
+    />
+  </div>
+);
+
+// Custom Icon für “Kurze Rast”
+const CoffeeCupIcon = () => (
+  <svg
+    width="18"
+    height="18"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M18 8h1a4 4 0 0 1 0 8h-1" />
+    <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z" />
+    <line x1="6" y1="1" x2="6" y2="4" />
+    <line x1="10" y1="1" x2="10" y2="4" />
+    <line x1="14" y1="1" x2="14" y2="4" />
+  </svg>
+);
 
 export default TimeTracker;
