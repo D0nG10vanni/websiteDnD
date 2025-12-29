@@ -1,4 +1,3 @@
-// components/ArticleBrowser.client.tsx
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
@@ -6,8 +5,9 @@ import { supabase } from '@/lib/supabaseClient'
 import type { Post, Folder } from '@/lib/types'
 import Link from 'next/link'
 import { ArticleViewer } from './articleBrowser/ArticleViewer'
-import { FolderTree } from './articleBrowser/FolderTree' // Neu
-import { ArticleList } from './articleBrowser/ArticleList' // Neu
+import { FolderTree } from './articleBrowser/FolderTree'
+import { ArticleList } from './articleBrowser/ArticleList'
+import { ArticleEditorModal } from './articleBrowser/ArticleEditorModal' // NEU
 
 interface Props {
   articles: Post[]
@@ -21,18 +21,21 @@ interface Props {
 export default function ArticleBrowser({ 
   articles, 
   gameId, 
-  isLoading: propsLoading, // Umbenannt um Konflikt zu vermeiden
+  isLoading: propsLoading,
   onDeleteArticle,
   onAddArticle,
   onUpdateArticle 
 }: Props) {
   // --- State ---
   const [folders, setFolders] = useState<Folder[]>([])
-  const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null) // null = Alle/Unkategorisiert Logik
+  const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null)
   const [selectedArticle, setSelectedArticle] = useState<Post | null>(null)
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
-  const [isMoving, setIsMoving] = useState(false) // Für Ladeindikator beim Verschieben
+  const [isMoving, setIsMoving] = useState(false)
+  
+  // NEU: State für das Bearbeiten
+  const [editingArticle, setEditingArticle] = useState<Post | null>(null)
 
   // --- Initial Data Loading ---
   useEffect(() => {
@@ -52,8 +55,6 @@ export default function ArticleBrowser({
   // --- Filter Logic ---
   const filteredArticles = useMemo(() => {
     let result = articles || []
-
-    // 1. Suche hat Priorität
     if (searchQuery.trim().length > 0) {
       const q = searchQuery.toLowerCase()
       return result.filter(a => 
@@ -61,13 +62,7 @@ export default function ArticleBrowser({
         a.content.toLowerCase().includes(q)
       ).sort((a, b) => a.title.localeCompare(b.title))
     }
-
-    // 2. Wenn keine Suche, filtere nach Ordner
     if (selectedFolderId === null) {
-      // Option A: Zeige NUR Unkategorisierte, wenn kein Ordner gewählt? 
-      // Option B: Zeige ALLE, wenn nichts gewählt?
-      // Hier: Wir nutzen "Unkategorisiert" als expliziten Filter.
-      // Wenn du einen "Alle Artikel" Button willst, bräuchte man eine separate ID (-1 o.ä.)
       return result.filter(a => !a.folder_id).sort((a, b) => a.title.localeCompare(b.title))
     } else {
       return result.filter(a => a.folder_id === selectedFolderId).sort((a, b) => a.title.localeCompare(b.title))
@@ -78,7 +73,7 @@ export default function ArticleBrowser({
 
   const handleFolderSelect = (id: number | null) => {
     setSelectedFolderId(id)
-    setSearchQuery('') // Suche leeren für Fokus
+    setSearchQuery('')
     setSelectedArticle(null)
   }
 
@@ -88,28 +83,22 @@ export default function ArticleBrowser({
 
   const handleDelete = async (id: number) => {
     if(!confirm("Diesen Artikel wirklich ins Nichts verbannen?")) return;
-    
     const success = await onDeleteArticle(id)
     if (success && selectedArticle?.id === id) {
       setSelectedArticle(null)
     }
   }
 
-  // Snappy Drag & Drop: Sofortiges Speichern
   const handleMoveArticle = async (articleId: number, targetFolderId: number | null) => {
     if (isMoving) return;
-
-    // 1. Optimistisches Update im Parent State (damit es sich sofort anfühlt)
     const article = articles.find(a => a.id === articleId)
     if (!article || article.folder_id === targetFolderId) return
 
-    // Update lokal
-    const updatedArticle = { ...article, folder_id: targetFolderId || 0 } // 0 oder null je nach DB Schema
-    onUpdateArticle(updatedArticle) // UI Update sofort
+    const updatedArticle = { ...article, folder_id: targetFolderId || 0 }
+    onUpdateArticle(updatedArticle)
     
     setIsMoving(true)
     try {
-      // 2. DB Update
       const { error } = await supabase
         .from('posts')
         .update({ folder_id: targetFolderId })
@@ -119,15 +108,41 @@ export default function ArticleBrowser({
     } catch (err) {
       console.error("Fehler beim Verschieben:", err)
       alert("Der Zauber ist fehlgeschlagen (Move failed).")
-      // Revert logic wäre hier gut, aber keep it simple for now
     } finally {
       setIsMoving(false)
+    }
+  }
+
+  // NEU: Update Funktion für das Modal
+  const handleSaveEdit = async (updatedArticle: Post) => {
+    // 1. Optimistisches UI Update
+    onUpdateArticle(updatedArticle)
+    
+    // Wenn der aktuell angezeigte Artikel bearbeitet wurde, State aktualisieren
+    if (selectedArticle?.id === updatedArticle.id) {
+      setSelectedArticle(updatedArticle)
+    }
+
+    // 2. DB Update
+    const { error } = await supabase
+      .from('posts')
+      .update({
+        title: updatedArticle.title,
+        content: updatedArticle.content,
+        folder_id: updatedArticle.folder_id
+      })
+      .eq('id', updatedArticle.id)
+
+    if (error) {
+      console.error("DB Error:", error)
+      throw error // Wird vom Modal gefangen
     }
   }
 
   return (
     <div className="flex flex-col h-[85vh] bg-black/40 backdrop-blur-md border border-amber-900/40 rounded-xl overflow-hidden shadow-[0_0_40px_rgba(0,0,0,0.5)]">
       
+      {/* Header und Sidebar Code bleiben gleich ... */}
       {/* --- HEADER --- */}
       <div className="flex items-center justify-between px-4 py-3 bg-black/40 border-b border-amber-900/40 shrink-0">
         <div className="flex items-center gap-4">
@@ -135,7 +150,6 @@ export default function ArticleBrowser({
             <span className="text-amber-600 mr-2">❖</span>
             ARCHIV
           </h2>
-          {/* Action Buttons Compact */}
           <div className="flex gap-2 ml-4">
             <Link href={`/games/${gameId}/ArticleView/WriteArticle`} className="btn-icon" title="Neuer Artikel">
                ✎
@@ -149,7 +163,6 @@ export default function ArticleBrowser({
           </div>
         </div>
 
-        {/* Suche */}
         <div className="relative w-64">
            <input
             type="text"
@@ -164,8 +177,8 @@ export default function ArticleBrowser({
         </div>
       </div>
 
-      {/* --- MAIN CONTENT (3 PANES) --- */}
       <div className="flex flex-1 overflow-hidden">
+        {/* PANE 1 & 2 bleiben unverändert ... */}
         
         {/* PANE 1: Folder Tree */}
         <div className={`${isSidebarOpen ? 'w-64' : 'w-0'} transition-all duration-300 border-r border-amber-900/30 flex flex-col bg-black/20 overflow-hidden`}>
@@ -178,9 +191,7 @@ export default function ArticleBrowser({
               >
                 <span className="opacity-70">✧</span> Unkategorisiert
               </button>
-              
               <div className="my-2 border-t border-amber-900/20"></div>
-
               <FolderTree 
                 folders={folders} 
                 selectedFolderId={selectedFolderId}
@@ -217,17 +228,30 @@ export default function ArticleBrowser({
           </div>
         </div>
 
-        {/* PANE 3: Viewer */}
+        {/* PANE 3: Viewer UPDATE */}
         <div className="flex-1 bg-gradient-to-br from-black/5 to-amber-950/20 relative overflow-hidden flex flex-col">
           <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
             <ArticleViewer 
               selected={selectedArticle} 
               articles={articles} 
               onSelectArticle={handleArticleSelect} 
+              onEdit={(article) => setEditingArticle(article)} // Handler übergeben
             />
           </div>
         </div>
       </div>
+
+      {/* MODAL INTEGRATION */}
+      {editingArticle && (
+        <ArticleEditorModal 
+          article={editingArticle}
+          folders={folders}
+          gameId={gameId}
+          isOpen={!!editingArticle}
+          onClose={() => setEditingArticle(null)}
+          onSave={handleSaveEdit}
+        />
+      )}
 
       <style jsx global>{`
         .btn-icon {

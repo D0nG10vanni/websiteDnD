@@ -165,11 +165,16 @@ export default function CombinedPage() {
     }
   };
 
+  const handleDashboardArticleEdit = (article: Post) => {
+    // Minimal implementation to satisfy required prop; opens the articles window for editing.
+    spawnWindow('articles', 'Artikel', 60, 90, 820, 720, article);
+  };
+
   const renderWindowContent = (win: WindowState) => {
     switch (win.type) {
         case 'logs': return <Logs gameId={gameId.toString()} onArticleSelect={handleDashboardArticleSelect} />;
         case 'graph': return (<div className="w-full h-full bg-black overflow-hidden"><GraphView articles={articles} folders={folders} onNodeClick={(node) => handleDashboardArticleSelect(node)} width={win.width} height={win.height} /></div>);
-        case 'reader': return (<div className="h-full w-full overflow-y-auto bg-[#0a0a0a] p-0 custom-scrollbar scrollbar-thin scrollbar-thumb-amber-700 scrollbar-track-transparent"><ArticleViewer key={win.articleData?.id || 'empty'} selected={win.articleData || null} articles={articles} onSelectArticle={handleDashboardArticleSelect} /></div>);
+        case 'reader': return (<div className="h-full w-full overflow-y-auto bg-[#0a0a0a] p-0 custom-scrollbar scrollbar-thin scrollbar-thumb-amber-700 scrollbar-track-transparent"><ArticleViewer key={win.articleData?.id || 'empty'} selected={win.articleData || null} articles={articles} onSelectArticle={(a) => handleDashboardArticleSelect(a)} onEdit={handleDashboardArticleEdit} /></div>);
         case 'players': return (<div className="h-full w-full bg-[#050505]"><PlayerDashboardGrid gameId={gameId} /></div>);
         case 'articles': case 'browser': return (<div className="h-full w-full overflow-y-auto bg-[#1a1a1a] custom-scrollbar"><ArticleBrowser articles={articles} gameId={gameId} isLoading={isLoading} onDeleteArticle={handleDeleteArticle} onAddArticle={handleAddArticle} onUpdateArticle={handleUpdateArticle} /></div>);
         case 'timeline': return <Timeline gameId={gameId} />;

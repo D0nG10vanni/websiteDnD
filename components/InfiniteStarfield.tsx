@@ -154,7 +154,11 @@ export default function InfiniteStarfield({ height }: InfiniteStarfieldProps) {
           transform: `rotate(${nebula.rotation}deg)`,
           filter: 'blur(60px)',
           mixBlendMode: 'screen',
-          animation: `float ${15 + Math.random() * 10}s ease-in-out infinite`,
+          // FIX: Shorthand 'animation' property replaced with individual properties
+          animationName: 'float',
+          animationDuration: `${15 + Math.random() * 10}s`,
+          animationTimingFunction: 'ease-in-out',
+          animationIterationCount: 'infinite',
         }}
       />
     ));
@@ -173,7 +177,11 @@ export default function InfiniteStarfield({ height }: InfiniteStarfieldProps) {
           opacity: star.opacity,
           transform: `rotate(${star.rotation}deg)`,
           mixBlendMode: 'screen',
-          animation: `twinkle ${3 + Math.random() * 4}s ease-in-out infinite`,
+          // FIX: Shorthand 'animation' property replaced to avoid conflict with animationDelay
+          animationName: 'twinkle',
+          animationDuration: `${3 + Math.random() * 4}s`,
+          animationTimingFunction: 'ease-in-out',
+          animationIterationCount: 'infinite',
           animationDelay: `${star.pulseDelay}s`,
         }}
       />

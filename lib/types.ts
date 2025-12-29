@@ -6,7 +6,7 @@ export interface Post {
   content: string
   kategorie: string
   game_id: number
-  folder_id: number
+  folder_id: number | null
 }
 
 export interface Game {
