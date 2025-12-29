@@ -271,7 +271,7 @@ export default function CombinedPage() {
               <button onClick={() => spawnWindow('articles', 'Artikel')} className="px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-white/5 rounded transition">ARTIKEL</button>
               <button onClick={() => spawnWindow('timer', 'Zeit', 100, 100, 290, 240)} className="px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-white/5 rounded transition">TIMER</button>
               <button onClick={() => spawnWindow('graph', 'Graph')} className="px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-white/5 rounded transition">GRAPH</button>
-              <button onClick={() => spawnWindow('reader', 'Reader')} className="px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-white/5 rounded transition">READER</button>
+              <button onClick={() => spawnWindow('story', 'Story')} className="px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-white/5 rounded transition">STORY</button>
               <button onClick={() => spawnWindow('players', 'Gefährten')} className="px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-white/5 rounded transition">SPIELER</button>
               <button onClick={() => spawnWindow('timeline', 'Timeline')} className="px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-white/5 rounded transition">TIMELINE</button>
               <div className="flex-grow"></div>
@@ -288,10 +288,10 @@ export default function CombinedPage() {
            <div className="fixed top-[168px] left-0 right-0 bottom-0 overflow-auto custom-scrollbar z-10">
              
              {/* Infinite Stars & Windows Container */}
-             <div className="relative w-full transition-all duration-75 ease-linear" style={{ height: `${canvasHeight}px`, minHeight: '100%' }}>
-                <div className="absolute top-0 left-0 w-full z-0 pointer-events-none">
-                     <InfiniteStarfield height={canvasHeight} />
-                </div>
+             <div 
+                data-theme="fantasy"
+                className="fixed top-32 left-0 right-0 bottom-0 w-full overflow-y-auto z-10 custom-scrollbar bg-base-200 text-base-content"
+              >  
                 
                 {/* Windows Rendering */}
                 {windows.map((win) => (
