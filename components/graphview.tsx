@@ -1,515 +1,518 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react';
+'use client';
+
+import React, { useRef, useState, useMemo, useCallback, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import * as d3 from 'd3';
 import type { Post, Folder } from '@/lib/types';
-import { Dialog } from '@headlessui/react'; // Modal-Bibliothek (HeadlessUI)
-import { XMarkIcon } from '@heroicons/react/24/outline'; // Für "Schließen"-Icon
-import MarkdownRenderer from './MarkdownRenderer'; // Importiere den Markdown-Renderer
+import { Dialog } from '@headlessui/react';
+import { XMarkIcon, ArrowsPointingOutIcon, ArrowPathIcon, InformationCircleIcon } from '@heroicons/react/24/outline';
+import MarkdownRenderer from './MarkdownRenderer';
 
-interface GraphNode extends d3.SimulationNodeDatum {
-  id: string;
-  title: string;
-  content: string;
-  folderId?: number | null;
-  folderName?: string;
-  connections: number;
+// TS-Fehler Unterdrückung für die Library
+const ForceGraph2D = dynamic(() => import('react-force-graph-2d'), { 
+  ssr: false,
+  loading: () => <div className="flex items-center justify-center h-full text-gray-500">Lade Knowledge Graph...</div>
+}) as any;
+
+// --- TYPEN ---
+interface GraphNode {
+  id: string; 
+  label: string;
+  type: 'article' | 'folder';
+  // shape entfernt -> alles Kreise
+  val: number; 
+  color: string;
+  data?: Post | Folder; 
   x?: number;
   y?: number;
+  neighbors?: {
+    incoming: GraphNode[];
+    outgoing: GraphNode[];
+  };
 }
 
-interface GraphLink extends d3.SimulationLinkDatum<GraphNode> {
+interface GraphLink {
   source: string | GraphNode;
   target: string | GraphNode;
-  value: number;
+  isFolderLink?: boolean;
 }
 
 interface GraphViewProps {
   articles: Post[];
   folders?: Folder[];
-  onNodeClick?: (article: Post) => void;
-  width?: number;
-  height?: number;
+  onNodeClick?: (article: Post) => void; 
 }
-
-type FolderColorMap = Map<number, string> // folder_id → farbwert
-type ParentFolderMap = Map<number, number> // child_id → top_level_id
 
 export default function GraphView({ 
   articles, 
   folders = [], 
-  onNodeClick, 
-  width = 800, 
-  height = 600 
+  onNodeClick 
 }: GraphViewProps) {
-  const svgRef = useRef<SVGSVGElement>(null);
-  const [selectedNode, setSelectedNode] = useState<string | null>(null);
-  const [hoveredNode, setHoveredNode] = useState<string | null>(null);
-  const [activeArticle, setActiveArticle] = useState<Post | null>(null);
-  const folderMap = new Map(folders.map(f => [f.id, f]));
-  const topLevelFolders = folders.filter(f => f.parent_id === null);
-
-  // 1. Farbschema für Top-Level-Folder
-  const topLevelColors = d3.schemeCategory10; // 10 eindeutige Farben
+  const fgRef = useRef<any>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   
-  // 2. Map: Top-Level-Folder-ID → Farbe
-  const topLevelColorMap = new Map<number, string>();
-    topLevelFolders.forEach((folder, index) => {
-      topLevelColorMap.set(folder.id, topLevelColors[index % topLevelColors.length]);
-    });
+  // State
+  const [activeArticle, setActiveArticle] = useState<Post | null>(null);
+  const [hoverNode, setHoverNode] = useState<GraphNode | null>(null);
+  const [infoPanelOpen, setInfoPanelOpen] = useState(true);
+  const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
 
-    const resolveTopLevelId = (folderId: number): number => {
-    let current = folderMap.get(folderId);
-    while (current && current.parent_id !== null) {
-      current = folderMap.get(current.parent_id);
-    }
-    return current?.id ?? folderId;
-  };
-
-  // Farbmapping für Top-Level-Ordner erstellen
-  const folderColorMap = new Map<number, string>();
-  folders.forEach((folder) => {
-    const topId = resolveTopLevelId(folder.id);
-    const baseColor = d3.color(topLevelColorMap.get(topId) || '#888');
-
-    if (baseColor) {
-      if (folder.id === topId) {
-        folderColorMap.set(folder.id, baseColor.formatHex());
-      } else {
-        // Unterordner → dunklere Abstufung
-        const darker = baseColor.darker(1 + Math.random()); // optional variiert
-        folderColorMap.set(folder.id, darker.formatHex());
+  // Resize Observer
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        setDimensions({ width: entry.contentRect.width, height: entry.contentRect.height });
       }
-    } else {
-      // fallback color if baseColor is null
-      folderColorMap.set(folder.id, '#888');
+    });
+    resizeObserver.observe(containerRef.current);
+    return () => resizeObserver.disconnect();
+  }, [infoPanelOpen]);
+
+  // --- PHYSIK-ENGINE ANPASSEN ---
+  useEffect(() => {
+    if (fgRef.current) {
+        // 1. Abstoßung (Charge): Viel stärker negativ -> drückt alles auseinander
+        fgRef.current.d3Force('charge').strength(-30);
+        
+        // 2. Link Distanz: Längere Leinen für mehr Luft
+        fgRef.current.d3Force('link').distance(150);
+
+        // 3. Zentrierungskraft etwas schwächer, damit es sich ausbreiten darf
+        // (Optional, oft reicht charge)
+        
+        // Simulation neu anheizen
+        fgRef.current.d3ReheatSimulation();
     }
-  });
-  // Extract wiki links from content
-  const extractWikiLinks = (content: string): string[] => {
-    const regex = /\[\[([^\]|]+)(\|[^\]]+)?\]\]/g;
-    const matches = [...content.matchAll(regex)];
-    return matches.map(match => match[1].trim());
-  };
+  }, [articles, folders]); // Wenn sich Daten ändern, Physik neu setzen
 
-  // Create nodes and links data
-  const graphData = useMemo(() => {
-    const folderMap = new Map(folders.map(f => [f.id, f.name]));
-
-    // Erfasse eindeutige folderIds zur späteren Farbkodierung
-    const uniqueFolderIds = Array.from(new Set(
-    articles.map(a => a.folder_id).filter(id => id != null)
-    )) as number[];
-
-    // Baue eindeutiges Farb-Mapping
-    const colors = [
-    '#ef4444', '#3b82f6', '#10b981', '#8b5cf6',
-    '#f97316', '#06b6d4', '#84cc16', '#ec4899',
-    ];
-    const folderColorMap = new Map<number, string>();
-    uniqueFolderIds.forEach((id, index) => {
-    folderColorMap.set(id, colors[index % colors.length]);
-    });
-
-    // Funktion für Farbauswahl
-    const getNodeColor = (node: GraphNode): string => {
-    if (node.folderId == null) return '#f59e0b'; // amber für unkategorisiert
-    return folderColorMap.get(node.folderId) || '#f59e0b';
-    };
-
-    const getFolderColor = (folderId: number | null): string => {
-    if (folderId == null) return '#f59e0b'; // amber
-    return folderColorMap.get(folderId) || '#f59e0b';
-    };
-
-    // Zähle incoming Links auch mit
-    const incomingCount = new Map<string, number>();
-    articles.forEach(article => {
-      const links = extractWikiLinks(article.content);
-      links.forEach(target => {
-        const key = target.trim();
-        incomingCount.set(key, (incomingCount.get(key) || 0) + 1);
-      });
-    });
-    
-    // Create nodes
-    const nodes: GraphNode[] = articles.map(article => {
-    const links = extractWikiLinks(article.content);
-    const folderId = article.folder_id != null ? Number(article.folder_id) : null;
-    const folderName = folderId != null ? folderMap.get(folderId) : 'Unkategorisiert';
-
-    const outgoing = links.length;
-    const incoming = incomingCount.get(article.title) || 0;
-
-    return {
-      id: article.title,
-      title: article.title,
-      content: article.content,
-      folderId,
-      folderName,
-      connections: outgoing + incoming // neue Berechnung
-    };
-  });
-
-    // Create links
+  // --- 1. DATEN-AUFBEREITUNG (MEMOIZED) ---
+  const { graphData, folderLegend } = useMemo(() => {
+    const nodes: GraphNode[] = [];
     const links: GraphLink[] = [];
-    const titleSet = new Set(articles.map(a => a.title));
+    
+    // Maps & Listen
+    const articleTitleToId = new Map<string, string>();
+    const articleIdToNodeMap = new Map<string, GraphNode>();
+    const folderColorMap = new Map<number, string>();
+    const legendItems: { id: number; name: string; color: string; depth: number }[] = [];
 
-    articles.forEach(article => {
-      const wikiLinks = extractWikiLinks(article.content);
-      wikiLinks.forEach(linkedTitle => {
-        if (titleSet.has(linkedTitle) && linkedTitle !== article.title) {
-          links.push({
-            source: article.title,
-            target: linkedTitle,
-            value: 1
-          });
+    // --- A. Ordner-Baum aufbauen ---
+    // Wir gruppieren erst alle Kinder zu ihren Eltern
+    const folderChildren = new Map<number | string, Folder[]>();
+    
+    folders.forEach(f => {
+      // Nutze 'root' als Key für Ordner ohne Eltern
+      const pid = f.parent_id === null ? 'root' : f.parent_id;
+      if (!folderChildren.has(pid)) folderChildren.set(pid, []);
+      folderChildren.get(pid)!.push(f);
+    });
+
+    // Sortieren für konsistente Farben (alphabetisch)
+    folderChildren.forEach(list => list.sort((a, b) => a.name.localeCompare(b.name)));
+
+    // --- B. Farben & Legende rekursiv berechnen ---
+    const rootColorScale = d3.scaleOrdinal(d3.schemeTableau10); // Starke Kontraste für Roots
+
+    const processFolderTree = (
+        folder: Folder, 
+        depth: number, 
+        parentColorHsl: { h: number, s: number, l: number } | null, 
+        siblingIndex: number, 
+        totalSiblings: number
+    ) => {
+        let color: any; // d3.HSLColor
+
+        if (depth === 0) {
+            // Root: Feste Farbe aus Palette
+            color = d3.hsl(rootColorScale(String(folder.id)));
+            // Wir setzen eine definierte Sättigung/Helligkeit für den Start
+            color.l = 0.45; 
+            color.s = 0.85; 
+        } else {
+            // Kind: Erbt Farbe vom Elternteil
+            // FIX: Wir übergeben h, s und l einzeln
+            color = d3.hsl(parentColorHsl!.h, parentColorHsl!.s, parentColorHsl!.l);
+            
+            // 1. Helligkeit erhöhen (Gradient nach Tiefe)
+            color.l = Math.min(0.92, color.l + 0.12);
+
+            // 2. Sibling-Differenzierung (Hue Shift)
+            if (totalSiblings > 1) {
+                const maxSpread = 50; 
+                const step = maxSpread / (totalSiblings - 1);
+                const shift = -maxSpread/2 + (siblingIndex * step);
+                color.h += shift;
+            }
+        }
+
+        const colorStr = color.toString();
+        folderColorMap.set(folder.id, colorStr);
+
+        // Eintrag für Legende
+        legendItems.push({ id: folder.id, name: folder.name, color: colorStr, depth });
+
+        // Ordner-Node für Graph erzeugen
+        nodes.push({
+            id: `folder_${folder.id}`,
+            label: folder.name,
+            type: 'folder',
+            val: 1,
+            color: 'transparent',
+            data: folder
+        });
+        
+        // Link zum Parent
+        if (folder.parent_id) {
+            links.push({ source: `folder_${folder.id}`, target: `folder_${folder.parent_id}`, isFolderLink: true });
+        }
+
+        // Rekursion für Kinder
+        // Das 'color' Objekt von d3 hat h, s, l Properties, daher passt es in die Typ-Definition
+        const children = folderChildren.get(folder.id) || [];
+        children.forEach((child, idx) => {
+            processFolderTree(child, depth + 1, color, idx, children.length);
+        });
+    };
+
+    // Start mit den Root-Ordnern
+    const roots = folderChildren.get('root') || [];
+    roots.forEach((root, idx) => {
+        processFolderTree(root, 0, null, idx, roots.length);
+    });
+
+    // --- C. Artikel-Nodes ---
+    articles.forEach(a => {
+      const nodeId = `post_${a.id}`;
+      articleTitleToId.set(a.title.toLowerCase(), nodeId);
+      
+      const fId = a.folder_id ? Number(a.folder_id) : 0;
+      // Farbe aus Map oder Grau fallback
+      const nodeColor = (fId && folderColorMap.has(fId)) 
+          ? folderColorMap.get(fId)! 
+          : '#64748b'; // Slate-500 für ordnerlose
+
+      const node: GraphNode = {
+        id: nodeId,
+        label: a.title,
+        type: 'article',
+        val: 5, 
+        color: nodeColor,
+        data: a,
+        neighbors: { incoming: [], outgoing: [] } 
+      };
+      nodes.push(node);
+      articleIdToNodeMap.set(nodeId, node);
+
+      if (a.folder_id) {
+        links.push({ source: nodeId, target: `folder_${a.folder_id}`, isFolderLink: true });
+      }
+    });
+
+    // --- D. Wiki-Links ---
+    const regex = /\[\[([^\]|]+)(\|[^\]]+)?\]\]/g;
+    articles.forEach(sourceArticle => {
+      const matches = [...sourceArticle.content.matchAll(regex)];
+      const sourceNodeId = `post_${sourceArticle.id}`;
+      matches.forEach(match => {
+        const targetTitle = match[1].trim().toLowerCase();
+        const targetId = articleTitleToId.get(targetTitle);
+        if (targetId) {
+          links.push({ source: sourceNodeId, target: targetId, isFolderLink: false });
         }
       });
     });
 
-    return { nodes, links };
+    // --- E. Größe & Nachbarn ---
+    nodes.filter(n => n.type === 'article').forEach(node => {
+        const outgoingLinks = links.filter(l => l.source === node.id && !l.isFolderLink);
+        const incomingLinks = links.filter(l => l.target === node.id && !l.isFolderLink);
+        
+        const totalConnections = outgoingLinks.length + incomingLinks.length;
+        node.val = 5 + Math.min(totalConnections, 20);
+
+        const outNodes = outgoingLinks.map(l => articleIdToNodeMap.get(l.target as string)!).filter(Boolean);
+        const inNodes = incomingLinks.map(l => articleIdToNodeMap.get(l.source as string)!).filter(Boolean);
+
+        node.neighbors!.outgoing = [...new Set(outNodes)];
+        node.neighbors!.incoming = [...new Set(inNodes)];
+    });
+
+    return { graphData: { nodes, links }, folderLegend: legendItems };
   }, [articles, folders]);
 
-  // Color scheme for different folders
-  const getNodeColor = (node: GraphNode): string => {
-    if (!node.folderId) return '#f59e0b'; // amber for uncategorized
+  // --- 2. INTERAKTIONEN ---
+  const handleNodeClick = useCallback((node: any) => {
+    const n = node as GraphNode;
+    if (n.type !== 'article') return;
+    if (n.data) {
+      fgRef.current?.centerAt(n.x, n.y, 1000);
+      fgRef.current?.zoom(3, 1000);
+      setActiveArticle(n.data as Post);
+    }
+  }, []);
+
+  // --- 3. RENDERING ---
+  const paintNode = useCallback((node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
+    const n = node as GraphNode;
+    if (n.type === 'folder') return; 
+
+    const isHovered = hoverNode?.id === n.id;
+    const isNeighbor = hoverNode && (
+        hoverNode.neighbors?.outgoing.some(neighbor => neighbor.id === n.id) ||
+        hoverNode.neighbors?.incoming.some(neighbor => neighbor.id === n.id)
+    );
+
+    const showText = isHovered || isNeighbor || globalScale > 1.8; 
+    const r = n.val;
+    const x = n.x!;
+    const y = n.y!;
+
+    // --- Node Zeichnen (Nur noch Kreise) ---
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, 2 * Math.PI, false);
+    ctx.fillStyle = n.color;
     
-    const colors = [
-      '#ef4444', // red
-      '#3b82f6', // blue  
-      '#10b981', // emerald
-      '#8b5cf6', // violet
-      '#f97316', // orange
-      '#06b6d4', // cyan
-      '#84cc16', // lime
-      '#ec4899', // pink
-    ];
+    // Dimmen bei Hover
+    if (hoverNode && !isHovered && !isNeighbor) {
+        ctx.globalAlpha = 0.2; 
+    } else {
+        ctx.globalAlpha = 1;
+    }
     
-    return colors[node.folderId % colors.length];
-  };
+    ctx.fill();
 
-  // Helper function to get folder color for legend - using the same logic as getNodeColor
-  const getFolderColor = (folderId: number | null): string => {
-    if (!folderId) return '#f59e0b'; // amber for uncategorized
+    // Highlights
+    if (isHovered) {
+      ctx.lineWidth = 3 / globalScale;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = n.color;
+    } else if (isNeighbor) {
+      ctx.lineWidth = 2 / globalScale;
+      ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+      ctx.stroke();
+    } else {
+      ctx.shadowBlur = 0;
+      ctx.lineWidth = 1 / globalScale;
+      ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+      ctx.stroke();
+    }
+
+    // --- Label ---
+    if (showText) {
+      const label = n.label;
+      const fontSize = isHovered ? (16 / globalScale) : (12 / globalScale);
+      ctx.font = `${isHovered ? 'bold' : ''} ${fontSize}px Sans-Serif`;
+      
+      const textWidth = ctx.measureText(label).width;
+      
+      ctx.fillStyle = 'rgba(17, 24, 39, 0.85)';
+      const padding = 4 / globalScale;
+      ctx.fillRect(
+          x - textWidth / 2 - padding, 
+          y + r + padding, 
+          textWidth + (padding * 2), 
+          fontSize + (padding * 2)
+      );
+
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(label, x, y + r + (padding * 2));
+    }
     
-    const colors = [
-      '#ef4444', // red
-      '#3b82f6', // blue  
-      '#10b981', // emerald
-      '#8b5cf6', // violet
-      '#f97316', // orange
-      '#06b6d4', // cyan
-      '#84cc16', // lime
-      '#ec4899', // pink
-    ];
-    
-    return colors[folderId % colors.length];
-  };
+    ctx.globalAlpha = 1; 
+  }, [hoverNode]);
 
-  useEffect(() => {
-    if (!svgRef.current || !graphData.nodes.length) return;
+  const getLinkColor = useCallback((link: any) => {
+      if (link.isFolderLink) return 'transparent';
+      
+      if (hoverNode) {
+          const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+          const targetId = typeof link.target === 'object' ? link.target.id : link.target;
 
-    const svg = d3.select(svgRef.current);
-    svg.selectAll('*').remove();
-
-    const container = svg.append('g');
-    const linksGroup = container.append('g').attr('class', 'links');
-    const nodesGroup = container.append('g').attr('class', 'nodes');
-
-    const zoom = d3.zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.2, 4])
-      .on('zoom', (event) => {
-        container.attr('transform', event.transform);
-      });
-
-    svg.call(zoom);
-
-    const simulation = d3.forceSimulation<GraphNode>(graphData.nodes)
-      .force('link', d3.forceLink<GraphNode, GraphLink>(graphData.links).id(d => d.id).distance(80).strength(0.5))
-      .force('charge', d3.forceManyBody().strength(-300))
-      .force('center', d3.forceCenter(width / 2, height / 2))
-      .force('collision', d3.forceCollide().radius(30));
-
-    // Create links
-    const links = linksGroup
-      .selectAll('line')
-      .data(graphData.links)
-      .enter()
-      .append('line')
-      .attr('stroke', '#4b5563')
-      .attr('stroke-opacity', 0.4)
-      .attr('stroke-width', 1.5)
-      .style('transition', 'all 0.3s ease');
-
-    // Create nodes
-    const nodeGroups = nodesGroup
-      .selectAll('g')
-      .data(graphData.nodes)
-      .enter()
-      .append('g')
-      .attr('class', 'node-group')
-      .style('cursor', 'pointer');
-
-    // Add circles for nodes
-    const circles = nodeGroups
-      .append('circle')
-      .attr('r', d => Math.max(8, Math.min(20, 8 + d.connections * 2)))
-      .attr('fill', getNodeColor)
-      .attr('stroke', '#1f2937')
-      .attr('stroke-width', 2)
-      .style('transition', 'all 0.3s ease');
-
-    // Add labels
-    const labels = nodeGroups
-      .append('text')
-      .text(d => d.title.length > 15 ? d.title.substring(0, 15) + '...' : d.title)
-      .attr('dy', -25)
-      .attr('text-anchor', 'middle')
-      .attr('fill', '#f9fafb')
-      .attr('font-size', '12px')
-      .attr('font-family', 'serif')
-      .attr('pointer-events', 'none')
-      .style('text-shadow', '1px 1px 2px rgba(0,0,0,0.8)');
-
-    // Add connection count badges
-    nodeGroups
-      .filter(d => d.connections > 0)
-      .append('circle')
-      .attr('r', 8)
-      .attr('cx', 15)
-      .attr('cy', -15)
-      .attr('fill', '#dc2626')
-      .attr('stroke', '#1f2937')
-      .attr('stroke-width', 1);
-
-    nodeGroups
-      .filter(d => d.connections > 0)
-      .append('text')
-      .text(d => d.connections.toString())
-      .attr('x', 15)
-      .attr('y', -11)
-      .attr('text-anchor', 'middle')
-      .attr('fill', 'white')
-      .attr('font-size', '10px')
-      .attr('font-weight', 'bold')
-      .attr('pointer-events', 'none');
-
-    // Add drag behavior
-    const drag = d3.drag<SVGGElement, GraphNode>()
-      .on('start', (event, d) => {
-        if (!event.active) simulation.alphaTarget(0.3).restart();
-        d.fx = d.x;
-        d.fy = d.y;
-      })
-      .on('drag', (event, d) => {
-        d.fx = event.x;
-        d.fy = event.y;
-      })
-      .on('end', (event, d) => {
-        if (!event.active) simulation.alphaTarget(0);
-        d.fx = null;
-        d.fy = null;
-      });
-
-    nodeGroups.call(drag);
-
-    // Add interaction handlers
-    nodeGroups
-      .on('click', (event, d) => {
-        event.stopPropagation();
-        const article = articles.find(a => a.title === d.title);
-        if (article && onNodeClick) {
-          onNodeClick(article);
-        }
-        setSelectedNode(d.id);
-      })
-      .on('mouseenter', (event, d) => {
-        setHoveredNode(d.id);
-        
-        // Highlight connected nodes and links
-        const connectedNodes = new Set<string>();
-        graphData.links.forEach(link => {
-          const sourceId = typeof link.source === 'string' ? link.source : link.source.id;
-          const targetId = typeof link.target === 'string' ? link.target : link.target.id;
+          if (sourceId === hoverNode.id) return '#ef4444'; // ROT: Ausgehend
+          if (targetId === hoverNode.id) return '#22c55e'; // GRÜN: Eingehend
           
-          if (sourceId === d.id) connectedNodes.add(targetId);
-          if (targetId === d.id) connectedNodes.add(sourceId);
-        });
-
-        // Dim non-connected elements
-        circles
-          .attr('opacity', node => 
-            node.id === d.id || connectedNodes.has(node.id) ? 1 : 0.3
-          );
-        
-        links
-          .attr('stroke-opacity', link => {
-            const sourceId = typeof link.source === 'string' ? link.source : link.source.id;
-            const targetId = typeof link.target === 'string' ? link.target : link.target.id;
-            return sourceId === d.id || targetId === d.id ? 0.8 : 0.1;
-          })
-          .attr('stroke-width', link => {
-            const sourceId = typeof link.source === 'string' ? link.source : link.source.id;
-            const targetId = typeof link.target === 'string' ? link.target : link.target.id;
-            return sourceId === d.id || targetId === d.id ? 3 : 1.5;
-          });
-
-        labels
-          .attr('opacity', node => 
-            node.id === d.id || connectedNodes.has(node.id) ? 1 : 0.3
-          );
-      })
-      .on('mouseleave', () => {
-        setHoveredNode(null);
-        
-        // Reset all elements
-        circles.attr('opacity', 1);
-        links
-          .attr('stroke-opacity', 0.4)
-          .attr('stroke-width', 1.5);
-        labels.attr('opacity', 1);
-      });
-
-    // Update positions on simulation tick
-    simulation.on('tick', () => {
-      links
-        .attr('x1', d => (d.source as GraphNode).x!)
-        .attr('y1', d => (d.source as GraphNode).y!)
-        .attr('x2', d => (d.target as GraphNode).x!)
-        .attr('y2', d => (d.target as GraphNode).y!);
-
-      nodeGroups.attr('transform', d => `translate(${d.x},${d.y})`);
-    });
-
-    nodeGroups
-      .on('click', (event, d) => {
-        event.stopPropagation();
-        const article = articles.find(a => a.title === d.title);
-        if (article) setActiveArticle(article); // NEU
-        setSelectedNode(d.id);
-      });
-
-    return () => {
-      simulation.stop();
-    };
-  }, [graphData, articles, width, height]);
-
-  const stats = useMemo(() => {
-    const folderDistribution: Record<string, { count: number; folderId: number | null }> = {};
-    
-    graphData.nodes.forEach(node => {
-      const folder = node.folderName || 'Unkategorisiert';
-      if (!folderDistribution[folder]) {
-        folderDistribution[folder] = { count: 0, folderId: node.folderId || null };
+          return 'rgba(50,50,50, 0.1)'; 
       }
-      folderDistribution[folder].count++;
-    });
-
-    return {
-      totalNodes: graphData.nodes.length,
-      totalLinks: graphData.links.length,
-      mostConnected: graphData.nodes.reduce((max, node) => 
-        node.connections > max.connections ? node : max, 
-        { connections: 0, title: '' }
-      ),
-      folderDistribution
-    };
-  }, [graphData]);
+      return '#4b5563'; 
+  }, [hoverNode]);
 
   return (
-    <div className="flex flex-col lg:flex-row gap-4">
-      {/* Sidebar Left: Stats */}
-      <div className="w-full lg:w-1/5 space-y-4">
-        <div className="bg-black/40 backdrop-blur-sm rounded-lg border border-amber-900/40 p-4">
-          <h2 className="font-serif text-center text-xl text-amber-200 mb-4">
-            <span className="text-amber-500">❋</span> KNOWLEDGE GRAPH <span className="text-amber-500">❋</span>
-          </h2>
-          <div className="grid grid-cols-2 gap-4 text-center text-sm">
-            {/* Stats Blöcke */}
-            <div className="bg-black/30 rounded p-2">
-              <div className="text-amber-100 font-bold">{stats.totalNodes}</div>
-              <div className="text-amber-200/60 text-xs">Artikel</div>
-            </div>
-            <div className="bg-black/30 rounded p-2">
-              <div className="text-amber-100 font-bold">{stats.totalLinks}</div>
-              <div className="text-amber-200/60 text-xs">Verbindungen</div>
-            </div>
-            <div className="bg-black/30 rounded p-2 col-span-2">
-              <div className="text-amber-100 font-bold">{stats.mostConnected.connections}</div>
-              <div className="text-amber-200/60 text-xs">Max. Links</div>
-              <div className="truncate text-amber-100" title={stats.mostConnected.title}>{stats.mostConnected.title}</div>
-            </div>
-          </div>
+    <div className="flex h-full w-full bg-gray-950 overflow-hidden relative font-sans">
+      
+      {/* GRAPH AREA */}
+      <div ref={containerRef} className="flex-1 relative h-full min-w-0">
+        <ForceGraph2D
+          ref={fgRef}
+          width={dimensions.width}
+          height={dimensions.height}
+          graphData={graphData}
+          
+          nodeCanvasObject={paintNode}
+          linkWidth={(link: any) => {
+             if (link.isFolderLink) return 0;
+             if (hoverNode) {
+                 const s = typeof link.source === 'object' ? link.source.id : link.source;
+                 const t = typeof link.target === 'object' ? link.target.id : link.target;
+                 if (s === hoverNode.id || t === hoverNode.id) return 2;
+             }
+             return 1;
+          }}
+          linkColor={getLinkColor}
+          linkDirectionalArrowLength={7.5}
+          linkDirectionalArrowRelPos={1}
+          
+          // Physics Startwerte
+          d3AlphaDecay={0.02} 
+          d3VelocityDecay={0.1}
+          cooldownTime={10000}
+          
+          onNodeClick={handleNodeClick}
+          onNodeHover={(node: any) => setHoverNode(node || null)}
+          backgroundColor="#020617" 
+        />
+
+        {/* Toolbar */}
+        <div className="absolute top-4 left-4 flex gap-2">
+          <button onClick={() => fgRef.current?.zoomToFit(800)} className="p-2 bg-slate-800 text-slate-200 rounded hover:bg-slate-700 border border-slate-600 shadow-lg">
+            <ArrowsPointingOutIcon className="w-5 h-5" />
+          </button>
+          <button onClick={() => fgRef.current?.d3ReheatSimulation()} className="p-2 bg-slate-800 text-slate-200 rounded hover:bg-slate-700 border border-slate-600 shadow-lg">
+            <ArrowPathIcon className="w-5 h-5" />
+          </button>
         </div>
       </div>
 
-      {/* Graph Middle */}
-      <div className="w-full lg:w-3/5">
-        <div className="mb-2 text-center text-amber-200/60 text-sm font-serif">
-          Ziehen zum Verschieben • Klicken zum Auswählen • Mausrad zum Zoomen
-        </div>
-        <div className="rounded border border-amber-900/20 overflow-hidden">
-          <svg ref={svgRef} width={width} height={height} className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900" />
-        </div>
-      </div>
-
-      {/* Legend Right */}
-      <div className="w-full lg:w-1/4 space-y-4">
-        {/* Legende */}
-        <div className="bg-black/30 rounded-lg p-4 border border-amber-900/20">
-          <h4 className="text-amber-200 font-serif font-bold mb-3 text-center">Legende</h4>
-          <div className="grid grid-cols-1 gap-2 text-sm">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 bg-amber-500 rounded-full border-2 border-gray-800" />
-              <span className="text-amber-200/80">Artikel-Node</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-0.5 bg-gray-500" />
-              <span className="text-amber-200/80">Wiki-Link</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-red-600 rounded-full text-white text-xs flex items-center justify-center font-bold">3</div>
-              <span className="text-amber-200/80">Verbindungen</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Farben */}
-        <div className="bg-black/30 rounded-lg p-4 border border-amber-900/20">
-          <h4 className="text-amber-200 font-serif font-bold mb-3 text-center">Farbzuordnung</h4>
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            {Object.entries(stats.folderDistribution).map(([folder, data]) => (
-              <div key={folder} className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full border border-gray-700" style={{ backgroundColor: getFolderColor(data.folderId) }} />
-                <span className="text-amber-200/70 truncate">{folder} ({data.count})</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Modal für Artikelanzeige */}
-      <Dialog open={!!activeArticle} onClose={() => setActiveArticle(null)} className="relative z-50">
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" aria-hidden="true" />
-        <div className="fixed inset-0 flex items-center justify-center p-4">
-            <Dialog.Panel className="max-w-3xl w-full bg-gray-900 rounded-xl p-6 border border-amber-700 shadow-xl overflow-y-auto max-h-[80vh] text-white">
-            <div className="flex justify-between items-start mb-4">
-                <Dialog.Title className="text-lg font-bold text-amber-300 font-serif">
-                {activeArticle?.title}
-                </Dialog.Title>
-                <button onClick={() => setActiveArticle(null)} className="text-gray-400 hover:text-red-400">
-                <XMarkIcon className="w-5 h-5" />
+      {/* SIDEBAR */}
+      <div className={`flex-shrink-0 transition-all duration-300 bg-slate-900 border-l border-slate-700 flex flex-col h-full z-20 absolute right-0 md:static ${infoPanelOpen ? 'w-80 translate-x-0' : 'w-0 translate-x-full md:w-0'}`}>
+        <div className={`w-80 flex flex-col h-full ${!infoPanelOpen && 'hidden'}`}>
+            <div className="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-800">
+                <h2 className="font-bold text-slate-100 flex items-center gap-2">
+                    <InformationCircleIcon className="w-5 h-5 text-blue-400"/>
+                    Knowledge Base
+                </h2>
+                <button onClick={() => setInfoPanelOpen(false)} className="text-slate-400 hover:text-white">
+                    <XMarkIcon className="w-5 h-5" />
                 </button>
             </div>
-            <MarkdownRenderer 
-                content={activeArticle?.content || ''} 
-                onLinkClick={(title) => {
-                const article = articles.find(a => a.title === title)
-                if (article) setActiveArticle(article)
-                }}
-            />
+
+            <div className="p-4 overflow-y-auto custom-scrollbar flex-1 space-y-6">
+                {/* 1. SELECTION INFO */}
+                <div className={`rounded p-3 border ${hoverNode ? 'bg-slate-800 border-blue-500/50' : 'bg-slate-800/50 border-slate-700 border-dashed'}`}>
+                    <h3 className="text-xs uppercase tracking-wider text-slate-400 mb-2">Aktiver Knoten</h3>
+                    {hoverNode?.type === 'article' ? (
+                    <div>
+                        <div className="font-bold text-lg text-white mb-1">{hoverNode.label}</div>
+                        <div className="text-xs text-slate-400 flex items-center gap-2">
+                            <span className="w-3 h-3 rounded-full" style={{background: hoverNode.color}}></span>
+                            {(hoverNode.data as Post).folder_id ? folderLegend.find(f => f.id === Number((hoverNode.data as Post).folder_id))?.name : 'Root'}
+                        </div>
+                    </div>
+                    ) : (
+                    <div className="text-slate-500 italic text-sm text-center py-2">Fahre über einen Knoten...</div>
+                    )}
+                </div>
+
+                {/* 2. CONNECTIONS */}
+                {hoverNode?.type === 'article' && (
+                    <div className="space-y-4 animate-in fade-in duration-300">
+                        
+                        {/* Outgoing */}
+                        <div>
+                            <h3 className="text-xs uppercase tracking-wider text-red-400 mb-2 flex justify-between">
+                                Verweist auf <span>{hoverNode.neighbors?.outgoing.length}</span>
+                            </h3>
+                            <div className="space-y-1 pl-2 border-l-2 border-slate-700">
+                                {hoverNode.neighbors?.outgoing.length === 0 && <span className="text-xs text-slate-600 italic">Keine ausgehenden Links</span>}
+                                {hoverNode.neighbors?.outgoing.slice(0, 8).map(n => (
+                                    <div key={n.id} className="text-sm text-slate-300 truncate hover:text-white cursor-help" title={n.label}>
+                                        → {n.label}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Incoming */}
+                        <div>
+                            <h3 className="text-xs uppercase tracking-wider text-green-400 mb-2 flex justify-between">
+                                Wird erwähnt von <span>{hoverNode.neighbors?.incoming.length}</span>
+                            </h3>
+                            <div className="space-y-1 pl-2 border-l-2 border-slate-700">
+                                {hoverNode.neighbors?.incoming.length === 0 && <span className="text-xs text-slate-600 italic">Keine eingehenden Links</span>}
+                                {hoverNode.neighbors?.incoming.slice(0, 8).map(n => (
+                                    <div key={n.id} className="text-sm text-slate-300 truncate hover:text-white cursor-help" title={n.label}>
+                                        ← {n.label}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                <hr className="border-slate-700" />
+
+                {/* 3. LEGEND (Strukturiert) */}
+                <div>
+                    <h3 className="text-xs uppercase tracking-wider text-slate-400 mb-3">Ordner-Struktur</h3>
+                    <div className="space-y-0.5 max-h-[40vh] overflow-y-auto custom-scrollbar pr-2">
+                    {folderLegend.map(f => (
+                        <div 
+                            key={f.id} 
+                            className="flex items-center gap-2 text-sm text-slate-300 py-1.5 px-2 hover:bg-slate-800 rounded transition-colors group"
+                            style={{ 
+                                // Einrückung basierend auf Tiefe
+                                paddingLeft: `${f.depth * 16 + 8}px`,
+                                // Optional: Leichter Rand links für tiefere Ebenen für visuelle Führung
+                                borderLeft: f.depth > 0 ? '2px solid rgba(255,255,255,0.05)' : 'none'
+                            }}
+                        >
+                            {/* Farb-Indikator */}
+                            <div 
+                                className="w-3 h-3 rounded-full flex-shrink-0 shadow-sm border border-white/10" 
+                                style={{backgroundColor: f.color}}
+                            ></div>
+                            
+                            {/* Name */}
+                            <span className={`truncate flex-1 ${f.depth === 0 ? 'font-semibold text-slate-200' : 'text-slate-400 group-hover:text-slate-200'}`}>
+                                {f.name}
+                            </span>
+                        </div>
+                    ))}
+                    {folderLegend.length === 0 && <div className="text-slate-500 italic text-xs p-2">Keine Ordner definiert</div>}
+                    </div>
+                </div>
+            </div>
+        </div>
+      </div>
+
+      {!infoPanelOpen && (
+        <button onClick={() => setInfoPanelOpen(true)} className="absolute top-4 right-4 p-2 bg-slate-800 text-blue-400 rounded-full shadow-lg border border-slate-600 hover:bg-slate-700 z-10">
+          <InformationCircleIcon className="w-6 h-6" />
+        </button>
+      )}
+
+      {/* MODAL */}
+      <Dialog open={!!activeArticle} onClose={() => setActiveArticle(null)} className="relative z-50">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm" aria-hidden="true" />
+        <div className="fixed inset-0 flex items-start justify-center p-4 pt-40">
+            <Dialog.Panel className="max-w-3xl w-full bg-slate-900 rounded-xl border border-slate-600 shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="flex justify-between items-center p-4 border-b border-slate-800 bg-slate-800">
+                <Dialog.Title className="text-xl font-bold text-slate-100">{activeArticle?.title}</Dialog.Title>
+                <button onClick={() => setActiveArticle(null)}><XMarkIcon className="w-6 h-6 text-slate-400 hover:text-red-400" /></button>
+            </div>
+            <div className="overflow-y-auto p-6 text-slate-300 custom-scrollbar">
+                <MarkdownRenderer content={activeArticle?.content || ''} onLinkClick={(title) => {
+                     const next = articles.find(a => a.title.toLowerCase() === title.toLowerCase());
+                     if (next) setActiveArticle(next);
+                }} />
+            </div>
             </Dialog.Panel>
         </div>
-        </Dialog>
+      </Dialog>
     </div>
   );
 }

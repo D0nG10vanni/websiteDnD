@@ -1,8 +1,10 @@
 'use client';
 
-import { useEffect, useState, useRef, useMemo } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import MarkdownRenderer from '@/components/MarkdownRenderer';
+// Importiere das Modal (Pfad ggf. anpassen, falls es in components liegt)
+import CharacterSheetModal from './CharacterSheetModal'; 
 
 interface Log {
   id: number;
@@ -11,6 +13,19 @@ interface Log {
   created_at: string;
   ingame_time?: string;
   creator_id: string | number;
+}
+
+// Interface muss zum CharacterSheetModal passen
+interface Character {
+  id: string;
+  name: string;
+  race: string;
+  profession: string;
+  background: string;
+  level: number;
+  stats: Record<string, number>;
+  alive: boolean;
+  game_id: number;
 }
 
 interface LogsProps {
@@ -31,22 +46,24 @@ export default function Logs({ gameId, onArticleSelect }: LogsProps) {
   const [filteredChars, setFilteredChars] = useState<string[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // NEU: CHARACTER POPUP STATE
+  const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
+  const [isLoadingChar, setIsLoadingChar] = useState(false);
+
   useEffect(() => {
     if (gameId) {
       fetchLogs(gameId);
-      fetchCharacters(); // Lade Charaktere statt User
+      fetchCharacters(); 
     }
   }, [gameId]);
 
-  // NEU: Charakternamen laden aus der 'characters' Tabelle
   async function fetchCharacters() {
     const { data, error } = await supabase
       .from('characters')
       .select('name')
-      .neq('name', null); // Sicherstellen, dass wir keine null-Namen haben
+      .neq('name', null); 
 
     if (data && !error) {
-      // Duplikate entfernen und sortieren
       const names = Array.from(new Set(data.map((c: any) => c.name))).sort();
       setAvailableChars(names);
     }
@@ -118,26 +135,20 @@ export default function Logs({ gameId, onArticleSelect }: LogsProps) {
     } as Log;
   }
 
-  // INPUT HANDLER FÜR AUTOCOMPLETE
   const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     setContent(val);
 
     const cursorIndex = e.target.selectionStart;
     const textUntilCursor = val.slice(0, cursorIndex);
-    
-    // Regex sucht nach einem @ am Ende, das noch nicht durch ein Leerzeichen abgeschlossen ist
-    // Erlaubt Suche auch mitten im Wort (z.B. @Kath...)
     const lastWordMatch = textUntilCursor.match(/@([^\s]*)$/);
 
     if (lastWordMatch) {
       const query = lastWordMatch[1].toLowerCase();
       setMentionQuery(query);
-      
       const matches = availableChars.filter(name => 
         name.toLowerCase().startsWith(query)
-      ).slice(0, 5); // Max 5 Vorschläge
-      
+      ).slice(0, 5); 
       setFilteredChars(matches);
     } else {
       setMentionQuery(null);
@@ -147,20 +158,14 @@ export default function Logs({ gameId, onArticleSelect }: LogsProps) {
 
   const insertMention = (charName: string) => {
     if (!textareaRef.current) return;
-    
     const cursorIndex = textareaRef.current.selectionStart;
     const textUntilCursor = content.slice(0, cursorIndex);
     const textAfterCursor = content.slice(cursorIndex);
-    
-    // Ersetze das @fragment durch @VollerName
-    // Wir fügen ein Leerzeichen danach ein, damit man weiterschreiben kann
     const newTextBefore = textUntilCursor.replace(/@([^\s]*)$/, `@${charName} `);
-    
     const newContent = newTextBefore + textAfterCursor;
     setContent(newContent);
     setMentionQuery(null);
     setFilteredChars([]);
-    
     textareaRef.current.focus();
   };
 
@@ -181,10 +186,38 @@ export default function Logs({ gameId, onArticleSelect }: LogsProps) {
     setLoading(false);
   };
 
-  const handleLinkClick = (title: string) => {
-    if (onArticleSelect) {
-      onArticleSelect(title);
+  // NEU: Logik beim Klick auf einen Link im Log
+  const handleLinkClick = async (linkTarget: string) => {
+    // Prüfen, ob es ein Character-Link ist (Format: "character:Name")
+    if (linkTarget.startsWith('character:')) {
+      const charName = linkTarget.replace('character:', '');
+      await openCharacterModal(charName);
+    } 
+    // Ansonsten Standard-Verhalten (Wiki/Artikel)
+    else if (onArticleSelect) {
+      onArticleSelect(linkTarget);
     }
+  };
+
+  // NEU: Charakter laden und Modal öffnen
+  const openCharacterModal = async (name: string) => {
+    setIsLoadingChar(true);
+    // Fetch Character Details by Name
+    // Wichtig: Wir gehen davon aus, dass Namen eindeutig sind pro Game, 
+    // sonst müsste man ggf. die ID beim Taggen mitspeichern.
+    const { data, error } = await supabase
+      .from('characters')
+      .select('*')
+      .eq('name', name)
+      .eq('game_id', gameId) // Sicherstellen, dass er zur Kampagne gehört
+      .single();
+
+    if (!error && data) {
+      setSelectedCharacter(data as Character);
+    } else {
+      console.error("Charakter nicht gefunden", error);
+    }
+    setIsLoadingChar(false);
   };
 
   const formatIngameTime = (isoString?: string) => {
@@ -211,20 +244,18 @@ export default function Logs({ gameId, onArticleSelect }: LogsProps) {
     });
   };
 
-  // HIGHLIGHTING LOGIC
-  // Wir erstellen einen Regex, der genau die bekannten Charakternamen findet.
-  // Das hilft bei Namen mit Leerzeichen (z.B. "Mr. P") oder Punkten.
+  // UPDATE: Erstellt jetzt Markdown-Links statt nur Bold
   const preprocessContent = (rawContent: string) => {
     if (availableChars.length === 0) return rawContent;
 
-    // Escapen von Sonderzeichen im Namen für Regex
     const escapedNames = availableChars.map(name => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-    // Sortieren nach Länge (längste zuerst), damit "TestName Long" vor "TestName" gefunden wird
     escapedNames.sort((a, b) => b.length - a.length);
 
     const pattern = new RegExp(`@(${escapedNames.join('|')})`, 'g');
     
-    return rawContent.replace(pattern, '**@$1**');
+    // Ersetzt @Name durch [**@Name**](character:Name)
+    // Das **...** sorgt für Fettdruck, []() für den Link
+    return rawContent.replace(pattern, '[**@$1**](character:$1)');
   };
 
   return (
@@ -248,7 +279,6 @@ export default function Logs({ gameId, onArticleSelect }: LogsProps) {
               disabled={loading}
             />
             
-            {/* DROPDOWN - JETZT UNTERHALB (top-full mt-1) */}
             {mentionQuery !== null && filteredChars.length > 0 && (
               <div className="absolute left-0 top-full mt-1 w-56 bg-black/95 border border-amber-600/50 rounded-sm shadow-xl z-50 overflow-hidden">
                 <div className="px-2 py-1 text-xs text-amber-500/50 border-b border-amber-900/30 font-serif uppercase tracking-wider bg-amber-900/10">
@@ -259,7 +289,6 @@ export default function Logs({ gameId, onArticleSelect }: LogsProps) {
                     <li 
                       key={name}
                       onMouseDown={(e) => {
-                        // onMouseDown statt onClick verhindert Fokusverlust der Textarea bevor Insert passiert
                         e.preventDefault();
                         insertMention(name);
                       }}
@@ -331,9 +360,10 @@ export default function Logs({ gameId, onArticleSelect }: LogsProps) {
                   <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-amber-900/0 via-amber-600/20 to-amber-900/0 opacity-50"></div>
                   
                   <div className="pl-2">
+                    {/* WICHTIG: onLinkClick übergeben, damit das Modal öffnet */}
                     <MarkdownRenderer
                       content={preprocessContent(log.content)}
-                      onLinkClick={handleLinkClick}
+                      onLinkClick={handleLinkClick} 
                       className="prose-sm prose-mystical-small"
                     />
                   </div>
@@ -344,6 +374,21 @@ export default function Logs({ gameId, onArticleSelect }: LogsProps) {
         )}
       </div>
 
+      {/* NEU: Das Modal rendern, wenn ein Charakter ausgewählt ist */}
+      {selectedCharacter && (
+        <CharacterSheetModal 
+          character={selectedCharacter} 
+          onClose={() => setSelectedCharacter(null)} 
+        />
+      )}
+
+      {/* Loading Overlay für Charakter-Abruf */}
+      {isLoadingChar && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="text-amber-500 font-serif animate-pulse">Beschwöre Charakter-Daten...</div>
+        </div>
+      )}
+
       <style jsx>{`
         :global(.prose-mystical-small) {
           font-size: 0.9rem;
@@ -353,11 +398,20 @@ export default function Logs({ gameId, onArticleSelect }: LogsProps) {
         :global(.prose-mystical-small p) {
           margin: 0.5rem 0;
         }
-        /* Highlight Style für @Character */
         :global(.prose-mystical-small strong) {
           color: #f59e0b;
           font-weight: 600;
           text-shadow: 0 0 8px rgba(245, 158, 11, 0.4);
+        }
+        /* Links im Text golden und cursor pointer */
+        :global(.prose-mystical-small a) {
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        :global(.prose-mystical-small a:hover strong) {
+            color: #fbbf24;
+            text-shadow: 0 0 12px rgba(251, 191, 36, 0.6);
         }
         .custom-scrollbar::-webkit-scrollbar {
           width: 6px;

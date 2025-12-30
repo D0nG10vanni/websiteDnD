@@ -173,7 +173,24 @@ export default function CombinedPage() {
   const renderWindowContent = (win: WindowState) => {
     switch (win.type) {
         case 'logs': return <Logs gameId={gameId.toString()} onArticleSelect={handleDashboardArticleSelect} />;
-        case 'graph': return (<div className="w-full h-full bg-black overflow-hidden"><GraphView articles={articles} folders={folders} onNodeClick={(node) => handleDashboardArticleSelect(node)} width={win.width} height={win.height} /></div>);
+        case 'graph': 
+  return (
+    <div className="w-full h-full bg-black overflow-hidden">
+      {/* WICHTIG: 
+         1. Kein width={...} mehr
+         2. Kein height={...} mehr
+         3. Der Parent-Div ("w-full h-full") bestimmt jetzt die Größe
+      */}
+      <GraphView 
+        articles={articles} 
+        folders={folders} 
+        // Das hier hatten wir vorhin besprochen (damit der Tab nicht wechselt):
+        // Falls du willst, dass beim Klick NICHTS im Dashboard passiert, 
+        // kannst du onNodeClick auch ganz weglassen!
+        // onNodeClick={(article) => handleDashboardArticleSelect(article)} 
+      />
+    </div>
+  );
         case 'reader': return (<div className="h-full w-full overflow-y-auto bg-[#0a0a0a] p-0 custom-scrollbar scrollbar-thin scrollbar-thumb-amber-700 scrollbar-track-transparent"><ArticleViewer key={win.articleData?.id || 'empty'} selected={win.articleData || null} articles={articles} onSelectArticle={(a) => handleDashboardArticleSelect(a)} onEdit={handleDashboardArticleEdit} /></div>);
         case 'players': return (<div className="h-full w-full bg-[#050505]"><PlayerDashboardGrid gameId={gameId} /></div>);
         case 'articles': case 'browser': return (<div className="h-full w-full overflow-y-auto bg-[#1a1a1a] custom-scrollbar"><ArticleBrowser articles={articles} gameId={gameId} isLoading={isLoading} onDeleteArticle={handleDeleteArticle} onAddArticle={handleAddArticle} onUpdateArticle={handleUpdateArticle} /></div>);
@@ -374,7 +391,7 @@ export default function CombinedPage() {
              </div>
              
              <div className={`px-6 py-6 h-full ${activeTab === 'graph' ? 'block' : 'hidden'}`}>
-                <div className="w-full flex justify-center h-full items-center">{!isLoading && <GraphView articles={articles} folders={folders} onNodeClick={handleGraphNodeClick} width={1000} height={700} />}</div>
+                <div className="w-full flex justify-center h-full items-center">{!isLoading && <GraphView articles={articles} folders={folders} onNodeClick={handleGraphNodeClick} />}</div>
              </div>
              
              <div className={`px-6 py-6 h-full ${activeTab === 'timeline' ? 'block' : 'hidden'}`}><Timeline gameId={gameId} /></div>
