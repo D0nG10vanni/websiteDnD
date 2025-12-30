@@ -19,10 +19,11 @@ import type { Post } from '@/lib/types';
 // Dashboard Components
 import { ArticleViewer } from '@/components/articleBrowser/ArticleViewer'; 
 import PlayerDashboardGrid from '@/components/PlayerDashboardGrid';
-import InfiniteStarfield from '@/components/InfiniteStarfield';
+import SkillCheck from '@/components/SkillCheck';
 import TimeTracker from '@/components/TimeTracker';
 
-type WindowType = 'logs' | 'reader' | 'graph' | 'timeline' | 'story' | 'players' | 'browser' | 'articles' | 'timer';
+type WindowType = 'logs' | 'reader' | 'graph' | 'timeline' | 'story' | 'players' | 'browser' | 'articles' | 'timer' | 'skillcheck';
+
 
 interface WindowState {
   id: string;
@@ -203,6 +204,8 @@ export default function CombinedPage() {
             </div>
           );
         default: return null;
+        case 'skillcheck':
+          return <SkillCheck />;
     }
   };
 
@@ -291,6 +294,12 @@ export default function CombinedPage() {
               <button onClick={() => spawnWindow('story', 'Story')} className="px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-white/5 rounded transition">STORY</button>
               <button onClick={() => spawnWindow('players', 'Gefährten')} className="px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-white/5 rounded transition">SPIELER</button>
               <button onClick={() => spawnWindow('timeline', 'Timeline')} className="px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-white/5 rounded transition">TIMELINE</button>
+              <button
+                onClick={() => spawnWindow('skillcheck', 'Skill Check', 140, 120, 520, 720)}
+                className="px-2 py-1 text-xs text-gray-400 hover:text-white hover:bg-white/5 rounded transition"
+              >
+                SKILLCHECK
+              </button>
               <div className="flex-grow"></div>
               <div className="text-[9px] text-gray-600 font-mono hidden md:block">
                   {hasLoadedLayout ? 'SESSION RESTORED' : 'NEW SESSION'} • H: {Math.round(canvasHeight)}px
