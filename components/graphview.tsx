@@ -5,8 +5,15 @@ import dynamic from 'next/dynamic';
 import * as d3 from 'd3';
 import type { Post, Folder } from '@/lib/types';
 import { Dialog } from '@headlessui/react';
-import { XMarkIcon, ArrowsPointingOutIcon, ArrowPathIcon, InformationCircleIcon } from '@heroicons/react/24/outline';
+import { 
+  XMarkIcon, 
+  ArrowsPointingOutIcon, 
+  ArrowPathIcon, 
+  InformationCircleIcon,
+  Cog6ToothIcon // Neues Icon für Einstellungen
+} from '@heroicons/react/24/outline';
 import MarkdownRenderer from './MarkdownRenderer';
+import { forceCollide } from 'd3-force';
 
 // TS-Fehler Unterdrückung für die Library
 const ForceGraph2D = dynamic(() => import('react-force-graph-2d'), { 
@@ -19,7 +26,6 @@ interface GraphNode {
   id: string; 
   label: string;
   type: 'article' | 'folder';
-  // shape entfernt -> alles Kreise
   val: number; 
   color: string;
   data?: Post | Folder; 
@@ -55,7 +61,14 @@ export default function GraphView({
   const [activeArticle, setActiveArticle] = useState<Post | null>(null);
   const [hoverNode, setHoverNode] = useState<GraphNode | null>(null);
   const [infoPanelOpen, setInfoPanelOpen] = useState(true);
+  const [settingsOpen, setSettingsOpen] = useState(false); // State für Settings Panel
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+
+  // --- NEU: Physik State ---
+  const [physicsControls, setPhysicsControls] = useState({
+    strength: -100, // Standard etwas erhöht, damit es sich besser verteilt
+    distance: 150
+  });
 
   // Resize Observer
   useEffect(() => {
@@ -69,22 +82,26 @@ export default function GraphView({
     return () => resizeObserver.disconnect();
   }, [infoPanelOpen]);
 
-  // --- PHYSIK-ENGINE ANPASSEN ---
+  // --- PHYSIK-ENGINE ANPASSEN (LIVE) ---
   useEffect(() => {
     if (fgRef.current) {
-        // 1. Abstoßung (Charge): Viel stärker negativ -> drückt alles auseinander
-        fgRef.current.d3Force('charge').strength(-30);
+        // 1. Abstoßung (Charge) - gesteuert durch Slider
+        // Je negativer, desto stärker stoßen sich Knoten ab
+        fgRef.current.d3Force('charge').strength(physicsControls.strength);
         
-        // 2. Link Distanz: Längere Leinen für mehr Luft
-        fgRef.current.d3Force('link').distance(150);
+        // 2. Link Distanz - gesteuert durch Slider
+        fgRef.current.d3Force('link').distance(physicsControls.distance);
 
-        // 3. Zentrierungskraft etwas schwächer, damit es sich ausbreiten darf
-        // (Optional, oft reicht charge)
+        // 3. Kollision: Größerer Radius, damit sich Knoten nicht überlappen
+        fgRef.current.d3Force(
+          'collide',
+          forceCollide(45).strength(1)
+        );
         
-        // Simulation neu anheizen
+        // Simulation neu anheizen (wichtig für Live-Update)
         fgRef.current.d3ReheatSimulation();
     }
-  }, [articles, folders]); // Wenn sich Daten ändern, Physik neu setzen
+  }, [articles, folders, physicsControls]); // Reagiert jetzt auch auf Slider-Changes
 
   // --- 1. DATEN-AUFBEREITUNG (MEMOIZED) ---
   const { graphData, folderLegend } = useMemo(() => {
@@ -98,21 +115,18 @@ export default function GraphView({
     const legendItems: { id: number; name: string; color: string; depth: number }[] = [];
 
     // --- A. Ordner-Baum aufbauen ---
-    // Wir gruppieren erst alle Kinder zu ihren Eltern
     const folderChildren = new Map<number | string, Folder[]>();
     
     folders.forEach(f => {
-      // Nutze 'root' als Key für Ordner ohne Eltern
       const pid = f.parent_id === null ? 'root' : f.parent_id;
       if (!folderChildren.has(pid)) folderChildren.set(pid, []);
       folderChildren.get(pid)!.push(f);
     });
 
-    // Sortieren für konsistente Farben (alphabetisch)
     folderChildren.forEach(list => list.sort((a, b) => a.name.localeCompare(b.name)));
 
     // --- B. Farben & Legende rekursiv berechnen ---
-    const rootColorScale = d3.scaleOrdinal(d3.schemeTableau10); // Starke Kontraste für Roots
+    const rootColorScale = d3.scaleOrdinal(d3.schemeTableau10); 
 
     const processFolderTree = (
         folder: Folder, 
@@ -121,23 +135,16 @@ export default function GraphView({
         siblingIndex: number, 
         totalSiblings: number
     ) => {
-        let color: any; // d3.HSLColor
+        let color: any; 
 
         if (depth === 0) {
-            // Root: Feste Farbe aus Palette
             color = d3.hsl(rootColorScale(String(folder.id)));
-            // Wir setzen eine definierte Sättigung/Helligkeit für den Start
             color.l = 0.45; 
             color.s = 0.85; 
         } else {
-            // Kind: Erbt Farbe vom Elternteil
-            // FIX: Wir übergeben h, s und l einzeln
             color = d3.hsl(parentColorHsl!.h, parentColorHsl!.s, parentColorHsl!.l);
-            
-            // 1. Helligkeit erhöhen (Gradient nach Tiefe)
             color.l = Math.min(0.92, color.l + 0.12);
 
-            // 2. Sibling-Differenzierung (Hue Shift)
             if (totalSiblings > 1) {
                 const maxSpread = 50; 
                 const step = maxSpread / (totalSiblings - 1);
@@ -148,11 +155,8 @@ export default function GraphView({
 
         const colorStr = color.toString();
         folderColorMap.set(folder.id, colorStr);
-
-        // Eintrag für Legende
         legendItems.push({ id: folder.id, name: folder.name, color: colorStr, depth });
 
-        // Ordner-Node für Graph erzeugen
         nodes.push({
             id: `folder_${folder.id}`,
             label: folder.name,
@@ -162,20 +166,16 @@ export default function GraphView({
             data: folder
         });
         
-        // Link zum Parent
         if (folder.parent_id) {
             links.push({ source: `folder_${folder.id}`, target: `folder_${folder.parent_id}`, isFolderLink: true });
         }
 
-        // Rekursion für Kinder
-        // Das 'color' Objekt von d3 hat h, s, l Properties, daher passt es in die Typ-Definition
         const children = folderChildren.get(folder.id) || [];
         children.forEach((child, idx) => {
             processFolderTree(child, depth + 1, color, idx, children.length);
         });
     };
 
-    // Start mit den Root-Ordnern
     const roots = folderChildren.get('root') || [];
     roots.forEach((root, idx) => {
         processFolderTree(root, 0, null, idx, roots.length);
@@ -187,10 +187,9 @@ export default function GraphView({
       articleTitleToId.set(a.title.toLowerCase(), nodeId);
       
       const fId = a.folder_id ? Number(a.folder_id) : 0;
-      // Farbe aus Map oder Grau fallback
       const nodeColor = (fId && folderColorMap.has(fId)) 
           ? folderColorMap.get(fId)! 
-          : '#64748b'; // Slate-500 für ordnerlose
+          : '#64748b'; 
 
       const node: GraphNode = {
         id: nodeId,
@@ -268,12 +267,10 @@ export default function GraphView({
     const x = n.x!;
     const y = n.y!;
 
-    // --- Node Zeichnen (Nur noch Kreise) ---
     ctx.beginPath();
     ctx.arc(x, y, r, 0, 2 * Math.PI, false);
     ctx.fillStyle = n.color;
     
-    // Dimmen bei Hover
     if (hoverNode && !isHovered && !isNeighbor) {
         ctx.globalAlpha = 0.2; 
     } else {
@@ -282,7 +279,6 @@ export default function GraphView({
     
     ctx.fill();
 
-    // Highlights
     if (isHovered) {
       ctx.lineWidth = 3 / globalScale;
       ctx.strokeStyle = '#ffffff';
@@ -300,7 +296,6 @@ export default function GraphView({
       ctx.stroke();
     }
 
-    // --- Label ---
     if (showText) {
       const label = n.label;
       const fontSize = isHovered ? (16 / globalScale) : (12 / globalScale);
@@ -333,8 +328,8 @@ export default function GraphView({
           const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
           const targetId = typeof link.target === 'object' ? link.target.id : link.target;
 
-          if (sourceId === hoverNode.id) return '#ef4444'; // ROT: Ausgehend
-          if (targetId === hoverNode.id) return '#22c55e'; // GRÜN: Eingehend
+          if (sourceId === hoverNode.id) return '#ef4444'; 
+          if (targetId === hoverNode.id) return '#22c55e'; 
           
           return 'rgba(50,50,50, 0.1)'; 
       }
@@ -366,25 +361,76 @@ export default function GraphView({
           linkDirectionalArrowLength={7.5}
           linkDirectionalArrowRelPos={1}
           
-          // Physics Startwerte
           d3AlphaDecay={0.02} 
           d3VelocityDecay={0.1}
-          cooldownTime={10000}
+          cooldownTime={7000}
           
           onNodeClick={handleNodeClick}
           onNodeHover={(node: any) => setHoverNode(node || null)}
           backgroundColor="#020617" 
         />
 
-        {/* Toolbar */}
+        {/* Toolbar Top Left */}
         <div className="absolute top-4 left-4 flex gap-2">
-          <button onClick={() => fgRef.current?.zoomToFit(800)} className="p-2 bg-slate-800 text-slate-200 rounded hover:bg-slate-700 border border-slate-600 shadow-lg">
+          <button onClick={() => fgRef.current?.zoomToFit(800)} className="p-2 bg-slate-800 text-slate-200 rounded hover:bg-slate-700 border border-slate-600 shadow-lg" title="Zoom Fit">
             <ArrowsPointingOutIcon className="w-5 h-5" />
           </button>
-          <button onClick={() => fgRef.current?.d3ReheatSimulation()} className="p-2 bg-slate-800 text-slate-200 rounded hover:bg-slate-700 border border-slate-600 shadow-lg">
+          <button onClick={() => fgRef.current?.d3ReheatSimulation()} className="p-2 bg-slate-800 text-slate-200 rounded hover:bg-slate-700 border border-slate-600 shadow-lg" title="Reload Physics">
             <ArrowPathIcon className="w-5 h-5" />
           </button>
         </div>
+
+        {/* PHYSICS SETTINGS PANEL (Bottom Left) */}
+        <div className="absolute bottom-4 left-4 z-10 flex flex-col gap-2">
+            <button 
+                onClick={() => setSettingsOpen(!settingsOpen)}
+                className={`p-2 rounded border shadow-lg flex items-center justify-center transition-colors ${settingsOpen ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-800 border-slate-600 text-slate-200 hover:bg-slate-700'}`}
+                title="Graph Einstellungen"
+            >
+                <Cog6ToothIcon className="w-5 h-5" />
+            </button>
+
+            {settingsOpen && (
+                <div className="bg-slate-800 border border-slate-700 rounded p-4 shadow-xl w-64 animate-in slide-in-from-bottom-2 fade-in">
+                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Physik Einstellungen</h3>
+                    
+                    {/* Strength Slider */}
+                    <div className="mb-4">
+                        <div className="flex justify-between text-xs text-slate-300 mb-1">
+                            <span>Abstoßung</span>
+                            <span>{physicsControls.strength}</span>
+                        </div>
+                        <input 
+                            type="range" 
+                            min="-500" 
+                            max="0" 
+                            step="10"
+                            value={physicsControls.strength}
+                            onChange={(e) => setPhysicsControls(prev => ({ ...prev, strength: Number(e.target.value) }))}
+                            className="w-full h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                        />
+                    </div>
+
+                    {/* Distance Slider */}
+                    <div>
+                        <div className="flex justify-between text-xs text-slate-300 mb-1">
+                            <span>Link Länge</span>
+                            <span>{physicsControls.distance}</span>
+                        </div>
+                        <input 
+                            type="range" 
+                            min="10" 
+                            max="400" 
+                            step="10"
+                            value={physicsControls.distance}
+                            onChange={(e) => setPhysicsControls(prev => ({ ...prev, distance: Number(e.target.value) }))}
+                            className="w-full h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                        />
+                    </div>
+                </div>
+            )}
+        </div>
+
       </div>
 
       {/* SIDEBAR */}
@@ -464,19 +510,14 @@ export default function GraphView({
                             key={f.id} 
                             className="flex items-center gap-2 text-sm text-slate-300 py-1.5 px-2 hover:bg-slate-800 rounded transition-colors group"
                             style={{ 
-                                // Einrückung basierend auf Tiefe
                                 paddingLeft: `${f.depth * 16 + 8}px`,
-                                // Optional: Leichter Rand links für tiefere Ebenen für visuelle Führung
                                 borderLeft: f.depth > 0 ? '2px solid rgba(255,255,255,0.05)' : 'none'
                             }}
                         >
-                            {/* Farb-Indikator */}
                             <div 
                                 className="w-3 h-3 rounded-full flex-shrink-0 shadow-sm border border-white/10" 
                                 style={{backgroundColor: f.color}}
                             ></div>
-                            
-                            {/* Name */}
                             <span className={`truncate flex-1 ${f.depth === 0 ? 'font-semibold text-slate-200' : 'text-slate-400 group-hover:text-slate-200'}`}>
                                 {f.name}
                             </span>
