@@ -27,7 +27,7 @@ export default function CharacterSheetModal({ character, onClose }: Props) {
   const stats = character.stats || { INT:0, REF:0, DEX:0, BODY:0, SPD:0, EMP:0, CRA:0, WILL:0, LUCK:0 };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[100] flex items-start justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200 pt-40">
       <div className="bg-[#121212] border border-amber-900/50 w-full max-w-4xl h-[85vh] rounded-xl flex flex-col shadow-2xl shadow-amber-900/20 overflow-hidden relative">
         
         {/* Close Button */}

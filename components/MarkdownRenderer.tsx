@@ -78,6 +78,8 @@ export default function MarkdownRenderer({ content, className = '', onLinkClick 
           [remarkWikiLinks, { onLinkClick }]
         ]}
         rehypePlugins={[rehypeKatex, rehypeRaw]}
+        // WICHTIG: Erlaubt das character: Protokoll
+        urlTransform={(value) => value}
         components={{
           // Handle wikilink buttons
           button: ({ className, children, ...props }) => {
@@ -86,7 +88,7 @@ export default function MarkdownRenderer({ content, className = '', onLinkClick 
               return (
                 <button
                   onClick={() => onLinkClick?.(target)}
-                  className="text-amber-500 underline hover:text-amber-300 font-serif"
+                  className="text-amber-500 hover:text-amber-300 font-serif text-[1.15em]"
                 >
                   {children}
                 </button>
@@ -94,13 +96,36 @@ export default function MarkdownRenderer({ content, className = '', onLinkClick 
             }
             return <button className={className} {...props}>{children}</button>
           },
-          a: ({ href, children }) => {
+          // HIER IST DER FIX FÜR DIE LINKS:
+          a: ({ href, children, ...props }) => {
+            // Prüfung, ob es ein interner Link ist
+            const isInternal = href?.startsWith('character:') || href?.startsWith('wiki:');
+            
             return (
-              <a href={href} className="text-blue-500 underline hover:text-blue-400">
+              <a 
+                href={href} 
+                {...props}
+                onClick={(e) => {
+                  // Wenn interner Link oder onLinkClick vorhanden: Abfangen!
+                  if (onLinkClick && (isInternal || !href?.startsWith('http'))) {
+                    e.preventDefault(); 
+                    // Fallback auf leeren String verhindern, falls href undefined ist
+                    onLinkClick(href || '');
+                  }
+                }}
+                className="text-amber-500 hover:text-amber-300 font-serif cursor-pointer transition-colors text-[1.05em]"
+              >
                 {children}
               </a>
             )
           },
+          
+          // Optional: Damit der Text fett und golden wird
+          strong: ({ children }) => (
+            <strong className="text-amber-500 font-bold drop-shadow-sm text-[1.05em]">
+              {children}
+            </strong>
+          ),
           blockquote: ({ children }) => {
             const childrenArray = React.Children.toArray(children)
 
