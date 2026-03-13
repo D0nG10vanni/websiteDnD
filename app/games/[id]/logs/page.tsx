@@ -24,6 +24,20 @@ import TimeTracker from '@/components/TimeTracker';
 
 type WindowType = 'logs' | 'reader' | 'graph' | 'timeline' | 'story' | 'players' | 'browser' | 'articles' | 'timer' | 'skillcheck';
 
+interface NpcCharacter {
+  id: string;
+  name: string;
+  race: string;
+  profession: string;
+  level: number;
+  background?: string;
+  alive: boolean;
+  player_id: number | null;
+  Users: {
+    username: string;
+  }[] | null;
+}
+
 
 interface WindowState {
   id: string;
@@ -48,11 +62,13 @@ export default function CombinedPage() {
   const [folders, setFolders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'articles' | 'logs' | 'graph' | 'timeline' | 'story' | 'players'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'articles' | 'logs' | 'graph' | 'timeline' | 'story' | 'players' | 'npcs'>('dashboard');
   
   const [selectedArticleFromLogs, setSelectedArticleFromLogs] = useState<Post | null>(null);
   const [selectedArticleContent, setSelectedArticleContent] = useState<string | null>(null);
   const [isLoadingArticleContent, setIsLoadingArticleContent] = useState(false);
+  const [npcCharacters, setNpcCharacters] = useState<NpcCharacter[]>([]);
+  const [isLoadingNpcs, setIsLoadingNpcs] = useState(false);
   
   const [gameTitle, setGameTitle] = useState<string>('');
 
@@ -112,8 +128,19 @@ export default function CombinedPage() {
       setIsLoading(true);
       const { data: a } = await supabase.from('posts').select('*').eq('game_id', gameId);
       const { data: f } = await supabase.from('folders').select('*').eq('game_id', gameId);
+      setIsLoadingNpcs(true);
+      const { data: charactersData } = await supabase
+        .from('characters')
+        .select('id, name, race, profession, level, background, alive, player_id, Users:Users!characters_player_id_fkey (username)')
+        .eq('game_id', gameId);
       setArticles(a || []);
       setFolders(f || []);
+      const onlyNpcs = ((charactersData || []) as NpcCharacter[]).filter((char) => {
+        const owner = Array.isArray(char.Users) ? char.Users[0] : null;
+        return !owner?.username;
+      });
+      setNpcCharacters(onlyNpcs);
+      setIsLoadingNpcs(false);
 
       const { data: gameData } = await supabase.from('games').select('name').eq('id', gameId).single();
       if (gameData) {
@@ -269,6 +296,7 @@ export default function CombinedPage() {
         <button className={activeTab === 'timeline' ? 'text-amber-500 font-bold tracking-widest uppercase text-sm' : 'text-gray-500 hover:text-gray-300 uppercase tracking-widest text-sm transition-colors'} onClick={() => setActiveTab('timeline')}>Timeline</button>
         <button className={activeTab === 'story' ? 'text-amber-500 font-bold tracking-widest uppercase text-sm' : 'text-gray-500 hover:text-gray-300 uppercase tracking-widest text-sm transition-colors'} onClick={() => setActiveTab('story')}>Story</button>
         <button className={activeTab === 'players' ? 'text-amber-500 font-bold tracking-widest uppercase text-sm' : 'text-gray-500 hover:text-gray-300 uppercase tracking-widest text-sm transition-colors'} onClick={() => setActiveTab('players')}>Spieler</button>
+        <button className={activeTab === 'npcs' ? 'text-amber-500 font-bold tracking-widest uppercase text-sm' : 'text-gray-500 hover:text-gray-300 uppercase tracking-widest text-sm transition-colors'} onClick={() => setActiveTab('npcs')}>NPCs</button>
       </div>
 
       {/* ========================================================================
@@ -407,6 +435,44 @@ export default function CombinedPage() {
              <div className={`px-6 py-6 h-full ${activeTab === 'story' ? 'block' : 'hidden'}`}><StoryBuilder gameId={gameId} /></div>
              <div className={`px-6 py-6 h-full ${activeTab === 'players' ? 'block' : 'hidden'}`}>
                 <PlayerList gameId={gameId} />
+             </div>
+             <div className={`px-6 py-6 h-full ${activeTab === 'npcs' ? 'block' : 'hidden'}`}>
+                <div className="bg-black/30 border border-white/10 rounded-xl p-4 h-full overflow-y-auto custom-scrollbar">
+                  <div className="flex items-center justify-between mb-4 border-b border-white/10 pb-2">
+                    <h3 className="font-serif text-xl text-amber-100">NPC Verzeichnis</h3>
+                    <span className="text-xs text-gray-400">{npcCharacters.length} Einträge</span>
+                  </div>
+
+                  {isLoadingNpcs ? (
+                    <div className="text-amber-200/60 animate-pulse">Lade NPCs...</div>
+                  ) : npcCharacters.length === 0 ? (
+                    <div className="text-sm text-gray-500 italic">Keine NPCs gefunden.</div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                      {npcCharacters.map((npc) => (
+                        <div
+                          key={npc.id}
+                          className={`rounded-lg border p-3 bg-black/40 ${npc.alive ? 'border-amber-900/30' : 'border-red-900/40 opacity-70'}`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <div className="text-amber-100 font-serif text-base">{npc.name}</div>
+                              <div className="text-[11px] uppercase tracking-wider text-amber-400/70 mt-0.5">
+                                {npc.race || 'Unbekannt'} • {npc.profession || 'Ohne Rolle'} • Stufe {npc.level ?? 0}
+                              </div>
+                            </div>
+                            <span className={`text-[10px] px-2 py-0.5 rounded border ${npc.alive ? 'border-emerald-700/50 text-emerald-300' : 'border-red-700/50 text-red-300'}`}>
+                              {npc.alive ? 'Aktiv' : 'Tot'}
+                            </span>
+                          </div>
+                          {npc.background && (
+                            <p className="mt-3 text-xs text-gray-300 line-clamp-3">{npc.background}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
              </div>
         </div>
       )}

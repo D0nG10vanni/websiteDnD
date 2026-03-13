@@ -1,7 +1,15 @@
 "use client";
 
-import "./globals.css";
 import Link from "next/link";
+
+const seeded = (seed: number): number => {
+  const x = Math.sin(seed * 12.9898) * 43758.5453;
+  return x - Math.floor(x);
+};
+
+const ranged = (seed: number, min: number, max: number): number => {
+  return min + seeded(seed) * (max - min);
+};
 
 export default function Home() {
 return (
@@ -13,11 +21,11 @@ return (
           key={i}
           className="ember absolute bg-gradient-to-t from-orange-500 to-yellow-400 rounded-full animate-float opacity-0" 
           style={{
-            width: Math.random() * 3 + 1 + 'px',
-            height: Math.random() * 3 + 1 + 'px',
-            left: Math.random() * 100 + '%',
-            animationDelay: Math.random() * 4 + 's',
-            animationDuration: (Math.random() * 2 + 3) + 's'
+            width: `${ranged(i + 1, 1, 4)}px`,
+            height: `${ranged(i + 101, 1, 4)}px`,
+            left: `${ranged(i + 201, 0, 100)}%`,
+            animationDelay: `${ranged(i + 301, 0, 4)}s`,
+            animationDuration: `${ranged(i + 401, 3, 5)}s`
           }}
         />
       ))}
@@ -68,9 +76,9 @@ return (
                   key={i}
                   className="absolute w-1 h-1 bg-orange-400 rounded-full opacity-0 group-hover:opacity-100 animate-ping"
                   style={{
-                    top: Math.random() * 100 + '%',
-                    left: Math.random() * 100 + '%',
-                    animationDelay: Math.random() * 2 + 's'
+                    top: `${ranged(i + 501, 0, 100)}%`,
+                    left: `${ranged(i + 601, 0, 100)}%`,
+                    animationDelay: `${ranged(i + 701, 0, 2)}s`
                   }}
                 />
               ))}
@@ -151,9 +159,9 @@ return (
                   key={i}
                   className="absolute w-1 h-1 bg-orange-400 rounded-full opacity-0 group-hover:opacity-100 animate-ping"
                   style={{
-                    top: `${Math.random() * 100}%`,
-                    left: `${Math.random() * 100}%`,
-                    animationDelay: `${Math.random() * 2}s`
+                    top: `${ranged(i + 801, 0, 100)}%`,
+                    left: `${ranged(i + 901, 0, 100)}%`,
+                    animationDelay: `${ranged(i + 1001, 0, 2)}s`
                   }}
                 />
               ))}
