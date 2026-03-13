@@ -25,17 +25,30 @@ import TimeTracker from '@/components/TimeTracker';
 type WindowType = 'logs' | 'reader' | 'graph' | 'timeline' | 'story' | 'players' | 'browser' | 'articles' | 'timer' | 'skillcheck';
 
 interface NpcCharacter {
-  id: string;
+  id: number;
+  game_id: number;
+  name: string;
+  location_id: number | null;
+  location_name?: string | null;
+  race: string | null;
+  age: number | null;
+  story: string | null;
+  profession: string | null;
+  article_id: number | null;
+}
+
+interface LocationOption {
+  id: number;
+  name: string;
+}
+
+interface NpcEditFormState {
   name: string;
   race: string;
   profession: string;
-  level: number;
-  background?: string;
-  alive: boolean;
-  player_id: number | null;
-  Users: {
-    username: string;
-  }[] | null;
+  age: string;
+  heimat: string;
+  story: string;
 }
 
 
@@ -68,7 +81,18 @@ export default function CombinedPage() {
   const [selectedArticleContent, setSelectedArticleContent] = useState<string | null>(null);
   const [isLoadingArticleContent, setIsLoadingArticleContent] = useState(false);
   const [npcCharacters, setNpcCharacters] = useState<NpcCharacter[]>([]);
+  const [locations, setLocations] = useState<LocationOption[]>([]);
   const [isLoadingNpcs, setIsLoadingNpcs] = useState(false);
+  const [editingNpc, setEditingNpc] = useState<NpcCharacter | null>(null);
+  const [npcForm, setNpcForm] = useState<NpcEditFormState>({
+    name: '',
+    race: '',
+    profession: '',
+    age: '',
+    heimat: '',
+    story: '',
+  });
+  const [isSavingNpc, setIsSavingNpc] = useState(false);
   
   const [gameTitle, setGameTitle] = useState<string>('');
 
@@ -126,20 +150,20 @@ export default function CombinedPage() {
 
     (async () => {
       setIsLoading(true);
-      const { data: a } = await supabase.from('posts').select('*').eq('game_id', gameId);
-      const { data: f } = await supabase.from('folders').select('*').eq('game_id', gameId);
+      const [{ data: a }, { data: f }, { data: locationData }] = await Promise.all([
+        supabase.from('posts').select('*').eq('game_id', gameId),
+        supabase.from('folders').select('*').eq('game_id', gameId),
+        supabase.from('locations').select('id, name').eq('game_id', gameId),
+      ]);
       setIsLoadingNpcs(true);
-      const { data: charactersData } = await supabase
-        .from('characters')
-        .select('id, name, race, profession, level, background, alive, player_id, Users:Users!characters_player_id_fkey (username)')
+      const { data: npcData } = await supabase
+        .from('npcs')
+        .select('id, game_id, name, location_id, race, age, story, profession, article_id')
         .eq('game_id', gameId);
       setArticles(a || []);
       setFolders(f || []);
-      const onlyNpcs = ((charactersData || []) as NpcCharacter[]).filter((char) => {
-        const owner = Array.isArray(char.Users) ? char.Users[0] : null;
-        return !owner?.username;
-      });
-      setNpcCharacters(onlyNpcs);
+      setLocations((locationData || []) as LocationOption[]);
+      setNpcCharacters((npcData || []) as NpcCharacter[]);
       setIsLoadingNpcs(false);
 
       const { data: gameData } = await supabase.from('games').select('name').eq('id', gameId).single();
@@ -251,6 +275,70 @@ export default function CombinedPage() {
     finally { setIsLoadingArticleContent(false); }
   };
   const handleGraphNodeClick = (a: Post) => setActiveTab('articles');
+
+  const openNpcEditor = (npc: NpcCharacter) => {
+    setEditingNpc(npc);
+    setNpcForm({
+      name: npc.name || '',
+      race: npc.race || '',
+      profession: npc.profession || '',
+      age: npc.age != null ? String(npc.age) : '',
+      heimat: npc.location_id != null ? String(npc.location_id) : '',
+      story: npc.story || '',
+    });
+  };
+
+  const closeNpcEditor = () => {
+    setEditingNpc(null);
+    setNpcForm({ name: '', race: '', profession: '', age: '', heimat: '', story: '' });
+    setIsSavingNpc(false);
+  };
+
+  const saveNpcChanges = async () => {
+    if (!editingNpc || isSavingNpc) return;
+
+    const trimmedName = npcForm.name.trim();
+    if (!trimmedName) {
+      alert('Name darf nicht leer sein.');
+      return;
+    }
+
+    const normalizedAge = npcForm.age.trim() === '' ? null : Number(npcForm.age);
+    if (normalizedAge !== null && Number.isNaN(normalizedAge)) {
+      alert('Bitte gib ein gueltiges Alter ein.');
+      return;
+    }
+
+    const normalizedHeimat = npcForm.heimat.trim() === '' ? null : Number(npcForm.heimat);
+
+    setIsSavingNpc(true);
+    const updates = {
+      name: trimmedName,
+      race: npcForm.race.trim() || null,
+      profession: npcForm.profession.trim() || null,
+      age: normalizedAge,
+      location_id: normalizedHeimat,
+      story: npcForm.story.trim() || null,
+    };
+
+    const { error } = await supabase
+      .from('npcs')
+      .update(updates)
+      .eq('id', editingNpc.id)
+      .eq('game_id', gameId);
+
+    if (error) {
+      setIsSavingNpc(false);
+      alert('NPC konnte nicht gespeichert werden.');
+      return;
+    }
+
+    setNpcCharacters((prev) =>
+      prev.map((npc) => (npc.id === editingNpc.id ? { ...npc, ...updates } : npc))
+    );
+    closeNpcEditor();
+  };
+
   const handleDeleteArticle = async (id: number) => {
     const { error } = await supabase.from('posts').delete().eq('id', id);
     if (!error) {
@@ -262,6 +350,10 @@ export default function CombinedPage() {
   };
   const handleAddArticle = (n: Post) => setArticles((prev) => [...prev, n]);
   const handleUpdateArticle = (u: Post) => setArticles((prev) => prev.map((a) => a.id === u.id ? u : a));
+  const getNpcLocationName = (npc: NpcCharacter) => {
+    const fromList = locations.find((location) => location.id === npc.location_id)?.name;
+    return fromList || npc.location_name || '';
+  };
 
   if (isNaN(gameId)) return <div className="p-10 text-error text-center">Kein Spiel ausgewählt.</div>;
   if (!isClient) return null; 
@@ -452,28 +544,130 @@ export default function CombinedPage() {
                       {npcCharacters.map((npc) => (
                         <div
                           key={npc.id}
-                          className={`rounded-lg border p-3 bg-black/40 ${npc.alive ? 'border-amber-900/30' : 'border-red-900/40 opacity-70'}`}
+                          className="rounded-lg border p-3 bg-black/40 border-amber-900/30"
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div>
                               <div className="text-amber-100 font-serif text-base">{npc.name}</div>
                               <div className="text-[11px] uppercase tracking-wider text-amber-400/70 mt-0.5">
-                                {npc.race || 'Unbekannt'} • {npc.profession || 'Ohne Rolle'} • Stufe {npc.level ?? 0}
+                                {npc.race || 'Unbekannt'} • {npc.profession || 'Ohne Rolle'} • Alter {npc.age ?? '?'} • 📍 {getNpcLocationName(npc) || 'Heimatlos'}
                               </div>
                             </div>
-                            <span className={`text-[10px] px-2 py-0.5 rounded border ${npc.alive ? 'border-emerald-700/50 text-emerald-300' : 'border-red-700/50 text-red-300'}`}>
-                              {npc.alive ? 'Aktiv' : 'Tot'}
+                            <span className="text-[10px] px-2 py-0.5 rounded border border-white/20 text-gray-300">
+                              #{npc.id}
                             </span>
                           </div>
-                          {npc.background && (
-                            <p className="mt-3 text-xs text-gray-300 line-clamp-3">{npc.background}</p>
+                          {npc.story && (
+                            <p className="mt-3 text-xs text-gray-300 line-clamp-3">{npc.story}</p>
                           )}
+                          <div className="mt-3 flex justify-end">
+                            <button
+                              onClick={() => openNpcEditor(npc)}
+                              className="text-xs px-2.5 py-1 rounded border border-amber-700/40 text-amber-200 hover:bg-amber-600/10 transition"
+                            >
+                              Bearbeiten
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
              </div>
+        </div>
+      )}
+
+      {editingNpc && (
+        <div className="fixed inset-0 z-[12000] flex items-center justify-center p-4">
+          <button
+            aria-label="NPC-Editor schliessen"
+            onClick={closeNpcEditor}
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+          />
+          <div className="relative w-full max-w-2xl rounded-xl border border-amber-900/40 bg-[#0c0c0c] shadow-2xl p-5">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-4">
+              <h3 className="font-serif text-xl text-amber-100">NPC bearbeiten: {editingNpc.name}</h3>
+              <button onClick={closeNpcEditor} className="text-gray-500 hover:text-white">✕</button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <label className="text-xs text-gray-300">
+                Name
+                <input
+                  value={npcForm.name}
+                  onChange={(e) => setNpcForm((prev) => ({ ...prev, name: e.target.value }))}
+                  className="mt-1 w-full rounded-md bg-black/50 border border-white/15 px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                />
+              </label>
+              <label className="text-xs text-gray-300">
+                Rasse
+                <input
+                  value={npcForm.race}
+                  onChange={(e) => setNpcForm((prev) => ({ ...prev, race: e.target.value }))}
+                  className="mt-1 w-full rounded-md bg-black/50 border border-white/15 px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                />
+              </label>
+              <label className="text-xs text-gray-300">
+                Beruf
+                <input
+                  value={npcForm.profession}
+                  onChange={(e) => setNpcForm((prev) => ({ ...prev, profession: e.target.value }))}
+                  className="mt-1 w-full rounded-md bg-black/50 border border-white/15 px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                />
+              </label>
+              <label className="text-xs text-gray-300">
+                Alter
+                <input
+                  type="number"
+                  value={npcForm.age}
+                  onChange={(e) => setNpcForm((prev) => ({ ...prev, age: e.target.value }))}
+                  className="mt-1 w-full rounded-md bg-black/50 border border-white/15 px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                />
+              </label>
+              <label className="text-xs text-gray-300">
+                Heimat
+                <select
+                  value={npcForm.heimat}
+                  onChange={(e) => setNpcForm((prev) => ({ ...prev, heimat: e.target.value }))}
+                  className="mt-1 w-full rounded-md bg-black/50 border border-white/15 px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                >
+                  <option value="">Keine Heimat</option>
+                  {locations.map((location) => (
+                    <option key={location.id} value={String(location.id)}>
+                      {location.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <label className="block text-xs text-gray-300 mt-3">
+              Story
+              <textarea
+                value={npcForm.story}
+                onChange={(e) => setNpcForm((prev) => ({ ...prev, story: e.target.value }))}
+                rows={6}
+                className="mt-1 w-full rounded-md bg-black/50 border border-white/15 px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-1 focus:ring-amber-500"
+              />
+            </label>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={closeNpcEditor}
+                className="px-3 py-1.5 text-sm rounded border border-white/20 text-gray-300 hover:bg-white/5"
+                disabled={isSavingNpc}
+              >
+                Abbrechen
+              </button>
+              <button
+                onClick={saveNpcChanges}
+                className="px-3 py-1.5 text-sm rounded border border-amber-600/50 text-amber-100 bg-amber-700/20 hover:bg-amber-700/30 disabled:opacity-50"
+                disabled={isSavingNpc}
+              >
+                {isSavingNpc ? 'Speichert...' : 'Speichern'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
       

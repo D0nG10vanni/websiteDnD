@@ -17,6 +17,14 @@ type Props = {
   onLinkClick?: (title: string) => void
 }
 
+const escapeHtml = (value: string): string =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+
 // Remark plugin to handle wikilinks
 const remarkWikiLinks: Plugin<[{ onLinkClick?: (title: string) => void }], Root> = (options = {}) => {
   return (tree: Root) => {
@@ -34,6 +42,8 @@ const remarkWikiLinks: Plugin<[{ onLinkClick?: (title: string) => void }], Root>
       for (const match of matches) {
         const [fullMatch, target, , alias] = match
         const start = match.index || 0
+        const text = alias || target
+        const isExternal = /^https?:\/\//i.test(target)
 
         // Add text before the wikilink
         if (start > lastIndex) {
@@ -43,10 +53,12 @@ const remarkWikiLinks: Plugin<[{ onLinkClick?: (title: string) => void }], Root>
           })
         }
 
-        // Add the wikilink as HTML
+        // External wikilinks are rendered as real anchors; internal links stay interactive buttons.
         children.push({
           type: 'html',
-          value: `<button class="wikilink-button" data-target="${target}">${alias || target}</button>`
+          value: isExternal
+            ? `<a href="${escapeHtml(target)}" target="_blank" rel="noopener noreferrer">${escapeHtml(text)}</a>`
+            : `<button class="wikilink-button" data-target="${escapeHtml(target)}">${escapeHtml(text)}</button>`
         })
 
         lastIndex = start + fullMatch.length

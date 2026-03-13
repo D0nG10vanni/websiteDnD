@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { useSupabaseClient, useUser } from '@supabase/auth-helpers-react'
+import { useSupabaseClient } from '@supabase/auth-helpers-react'
 import type { Post } from '@/lib/types'
 import type { Folder } from '@/lib/types'
+import { supabase as authSupabase } from '@/lib/supabaseClient'
 
 // Komponenten
 import ArticleHeader from '@/components/article/ArticleHeader'
@@ -23,7 +24,6 @@ export default function NeuerArtikelPage() {
   const router = useRouter()
   const gameId = parseInt(params?.id as string, 10)
   const supabase = useSupabaseClient()
-  const user = useUser()
 
   // State
   const [title, setTitle] = useState('')
@@ -36,6 +36,7 @@ export default function NeuerArtikelPage() {
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null)
   const [showPreview, setShowPreview] = useState(true)
   const [isLoadingFolders, setIsLoadingFolders] = useState(true)
+  const [userUuid, setUserUuid] = useState<string | null>(null)
   
   // Refs für Live-Rendering
   const lastLineRef = useRef('')
@@ -65,6 +66,18 @@ export default function NeuerArtikelPage() {
       setIsLoadingFolders(true)
       
       try {
+        const {
+          data: { user },
+          error: userError,
+        } = await authSupabase.auth.getUser()
+
+        if (userError) {
+          console.error('Fehler beim Abrufen des Benutzers:', userError)
+          setUserUuid(null)
+        } else {
+          setUserUuid(user?.id ?? null)
+        }
+
         // Ordner laden
         const { data: foldersData, error: foldersError } = await supabase
           .from('folders')
@@ -203,7 +216,9 @@ export default function NeuerArtikelPage() {
       return
     }
 
-    if (!user) {
+    const creatorId = userUuid || (await authSupabase.auth.getUser()).data.user?.id || null
+
+    if (!creatorId) {
       alert('Du musst angemeldet sein, um Artikel zu erstellen.')
       return
     }
@@ -218,7 +233,7 @@ export default function NeuerArtikelPage() {
           content: content.trim(),
           game_id: gameId,
           folder_id: folderId,
-          creator: user.id // <--- HIER GEÄNDERT (vorher: user_id: user.id)
+          creator: creatorId
         })
         .select()
         .single()
@@ -231,7 +246,7 @@ export default function NeuerArtikelPage() {
         alert('Artikel erfolgreich gespeichert!')
         
         // Zurück zur Artikel-Übersicht
-        router.push(`/games/${gameId}/ArticleView`)
+        router.push(`/games/${gameId}/ArticleView/WriteArticle`)
       }
     } catch (error) {
       console.error('Unerwarteter Fehler:', error)

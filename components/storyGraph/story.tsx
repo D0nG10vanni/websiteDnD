@@ -25,9 +25,20 @@ import EditorPopup from './editorPopup'; // Dein neues Popup
 
 interface StoryNodeData {
   label: string;
+  description?: string;
   color: string;
   predecessors: string[];
-  // Callback zum Hineinzoomen (nur für QuestGroup wichtig)
+  done?: boolean;
+  image_url?: string;
+  tags?: string[];
+  metadata?: any;
+  // --- NEU: Verknüpfungen ---
+  log_id?: number | null;
+  linked_article_id?: number | null;
+  linked_npc_id?: number | null;
+  linked_item_id?: number | null;
+  linked_location_id?: number | null;
+  
   onDrillDown?: (id: string, label: string) => void; 
 }
 
@@ -219,6 +230,75 @@ const QuestGroupNode = ({ id, data }: NodeProps<StoryNodeData>) => {
   );
 };
 
+// 1. Die "Sticky Note" (Gelber Zettel, freischwebend, keine Eingänge/Ausgänge zwingend)
+const NoteNode = ({ data }: NodeProps<StoryNodeData>) => (
+  <div className="w-48 p-4 shadow-xl transform -rotate-2" style={{ backgroundColor: data.color || '#fef08a', border: '1px solid #fde047' }}>
+    <div className="text-gray-800 font-serif text-sm whitespace-pre-wrap font-medium">
+      📌 {data.label}
+    </div>
+    {data.description && <div className="mt-2 text-xs text-gray-700 font-handwriting">{data.description}</div>}
+  </div>
+);
+
+// 2. NPC / Charakter Node (Rund, mit Bild)
+const NpcNode = ({ data }: NodeProps<StoryNodeData>) => (
+  <div className={`p-1 rounded-full bg-gray-800 border-4 shadow-2xl flex items-center gap-3 pr-4 transition-all ${data.done ? 'opacity-50 grayscale border-gray-600' : 'border-emerald-500'}`}>
+    <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-700 flex-shrink-0">
+      {data.image_url ? (
+        <img src={data.image_url} alt={data.label} className="w-full h-full object-cover" />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center text-xl">👤</div>
+      )}
+    </div>
+    <div className="flex flex-col">
+      <span className="text-xs text-emerald-400 font-bold uppercase tracking-wider">NPC</span>
+      <span className="text-white font-medium text-sm">{data.label}</span>
+      {data.tags && data.tags.length > 0 && (
+        <span className="text-[9px] text-gray-400 mt-1">{data.tags.join(', ')}</span>
+      )}
+    </div>
+    <Handle type="target" position={Position.Left} className="!bg-emerald-500" />
+    <Handle type="source" position={Position.Right} className="!bg-emerald-500" />
+  </div>
+);
+
+// 3. Combat / Boss Fight Node
+const CombatNode = ({ data }: NodeProps<StoryNodeData>) => (
+  <div className={`p-3 rounded-lg border-2 shadow-[0_0_15px_rgba(220,38,38,0.3)] bg-gray-900 min-w-[160px] ${data.done ? 'border-gray-700 opacity-60' : 'border-red-600'}`}>
+    <div className="flex justify-between items-center mb-2 border-b border-red-900/50 pb-1">
+      <span className="text-red-500 font-bold text-xs uppercase tracking-widest flex items-center gap-1">
+        ⚔️ Combat {data.done && '✓'}
+      </span>
+      {data.metadata?.cr && <span className="bg-red-950 text-red-300 text-[10px] px-1.5 py-0.5 rounded">CR {data.metadata.cr}</span>}
+    </div>
+    <div className={`text-white text-sm font-medium ${data.done ? 'line-through text-gray-400' : ''}`}>{data.label}</div>
+    {data.description && <div className="mt-1 text-xs text-gray-400 line-clamp-2">{data.description}</div>}
+    <Handle type="target" position={Position.Left} className="!bg-red-500" />
+    <Handle type="source" position={Position.Right} className="!bg-red-500" />
+  </div>
+);
+
+// 4. Location Node (Mit Hintergrundbild-Option)
+const LocationNode = ({ data }: NodeProps<StoryNodeData>) => (
+  <div 
+    className="relative w-48 h-24 rounded-lg shadow-xl overflow-hidden border border-white/20 group"
+    style={{ backgroundColor: data.color || '#1e293b' }}
+  >
+    {data.image_url && (
+      <div className="absolute inset-0 opacity-40 group-hover:opacity-60 transition-opacity">
+        <img src={data.image_url} alt="" className="w-full h-full object-cover" />
+      </div>
+    )}
+    <div className="absolute inset-0 bg-gradient-to-t from-black/90 to-transparent" />
+    <div className="absolute bottom-2 left-3 right-3">
+      <div className="text-[10px] text-blue-300 font-bold uppercase tracking-wider mb-0.5">🗺️ Location</div>
+      <div className="text-white font-medium text-sm truncate">{data.label}</div>
+    </div>
+    <Handle type="target" position={Position.Left} className="!bg-blue-400" />
+    <Handle type="source" position={Position.Right} className="!bg-blue-400" />
+  </div>
+);
+
 // Base Types Mapping
 const baseTypes = {
   start: StartNode,
@@ -226,7 +306,11 @@ const baseTypes = {
   gateway: GatewayNode,
   event: EventNode,
   end: EndNode,
-  questGroup: QuestGroupNode, // Neuer Typ
+  questGroup: QuestGroupNode,
+  note: NoteNode,
+  npc: NpcNode,
+  combat: CombatNode,
+  location: LocationNode
 };
 
 // Toast Component
@@ -384,8 +468,19 @@ const computeEdges = useCallback((nodeList: StoryNode[]): Edge[] => {
           position: row.position || { x: 200, y: 200 },
           data: {
             label: row.label || `${row.type} node`,
+            description: row.description, // NEU
             color: row.color,
             predecessors: Array.isArray(row.predecessors) ? row.predecessors : [],
+            image_url: row.image_url,     // NEU
+            tags: row.tags || [],         // NEU
+            done: row.done || false,      // NEU
+            metadata: row.metadata || {},  // NEU
+            // ... (innerhalb von loadData)
+            log_id: row.log_id,
+            linked_article_id: row.linked_article_id,
+            linked_npc_id: row.linked_npc_id,
+            linked_item_id: row.linked_item_id,
+            linked_location_id: row.linked_location_id,
           },
         }));
 
@@ -584,7 +679,11 @@ const computeEdges = useCallback((nodeList: StoryNode[]): Edge[] => {
           <button onClick={() => addNode("story")} className="px-3 py-1.5 text-xs font-bold rounded bg-blue-500 hover:bg-blue-600 text-white shadow transition-all active:scale-95">Encounter</button>
           <button onClick={() => addNode("gateway")} className="px-3 py-1.5 text-xs font-bold rounded bg-yellow-500 hover:bg-yellow-600 text-black shadow transition-all active:scale-95">Decision</button>
           <button onClick={() => addNode("event")} className="px-3 py-1.5 text-xs font-bold rounded bg-purple-500 hover:bg-purple-600 text-white shadow transition-all active:scale-95">Event</button>
-          
+          <button onClick={() => addNode("note")} className="px-3 py-1.5 text-xs font-bold rounded bg-yellow-200 text-yellow-900 shadow">Notiz</button>
+          <button onClick={() => addNode("npc")} className="px-3 py-1.5 text-xs font-bold rounded bg-emerald-600 text-white shadow">NPC</button>
+          <button onClick={() => addNode("combat")} className="px-3 py-1.5 text-xs font-bold rounded bg-red-700 text-white shadow">Kampf</button>
+          <button onClick={() => addNode("location")} className="px-3 py-1.5 text-xs font-bold rounded bg-slate-600 text-white shadow">Ort</button>
+
           {/* NEU: Sub-Quest Button */}
           <div className="w-px h-6 bg-gray-600 mx-1"></div>
           <button onClick={() => addNode("questGroup")} className="px-3 py-1.5 text-xs font-bold rounded bg-orange-500 hover:bg-orange-600 text-white shadow transition-all active:scale-95 flex gap-1 items-center">
@@ -638,12 +737,13 @@ const computeEdges = useCallback((nodeList: StoryNode[]): Edge[] => {
       
       {/* Das neue Editor Popup */}
       {selectedNode && (
-        <EditorPopup
-          node={selectedNode}
-          onChange={updateNodeData}
-          onClose={() => dispatch({ type: 'SET_SELECTED_NODE', payload: null })}
-        />
-      )}
+  <EditorPopup
+    node={selectedNode}
+    gameId={gameId} // <-- WICHTIG: Hier die gameId übergeben!
+    onChange={updateNodeData}
+    onClose={() => dispatch({ type: 'SET_SELECTED_NODE', payload: null })}
+  />
+)}
 
     </div>
   );

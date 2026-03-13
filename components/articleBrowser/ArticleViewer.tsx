@@ -5,6 +5,16 @@ import MarkdownRenderer from '@/components/MarkdownRenderer'
 import { supabase } from '@/lib/supabaseClient'
 import type { Post } from '@/lib/types'
 
+interface NpcTagInfo {
+  id: number
+  name: string
+  race: string | null
+  profession: string | null
+  age: number | null
+  location_id: number | null
+  article_id: number | null
+}
+
 interface ArticleViewerProps {
   selected: Post | null
   articles: Post[]
@@ -15,6 +25,8 @@ interface ArticleViewerProps {
 export function ArticleViewer({ selected, articles, onSelectArticle, onEdit }: ArticleViewerProps) {
   const [content, setContent] = useState<string | null>(null)
   const [isLoadingContent, setIsLoadingContent] = useState(false)
+  const [npcInfo, setNpcInfo] = useState<NpcTagInfo | null>(null)
+  const [locationName, setLocationName] = useState<string | null>(null)
 
   useEffect(() => {
     if (!selected) return
@@ -26,19 +38,44 @@ export function ArticleViewer({ selected, articles, onSelectArticle, onEdit }: A
     
     // Simple Logik: Lade immer frisch aus DB für Konsistenz, außer wir optimieren später.
     setContent(null)
+    setNpcInfo(null)
+    setLocationName(null)
     setIsLoadingContent(true)
     ;(async () => {
-      const { data, error } = await supabase
-        .from('posts')
-        .select('content')
-        .eq('id', selected.id)
-        .single()
+      const [{ data, error }, { data: npcData }] = await Promise.all([
+        supabase
+          .from('posts')
+          .select('content')
+          .eq('id', selected.id)
+          .single(),
+        supabase
+          .from('npcs')
+          .select('id, name, race, profession, age, location_id, article_id')
+          .eq('game_id', selected.game_id)
+          .eq('name', selected.title)
+          .maybeSingle(),
+      ])
+
       if (error) {
         console.error(error)
-        setContent('*Die Zeichen verblassen vor deinen Augen…*')
+        setContent('*Die Zeichen verblassen vor deinen Augen...*')
       } else {
         setContent(data.content)
       }
+
+      const npc = (npcData as NpcTagInfo | null) ?? null
+      setNpcInfo(npc)
+
+      if (npc?.location_id != null) {
+        const { data: locationData } = await supabase
+          .from('locations')
+          .select('name')
+          .eq('id', npc.location_id)
+          .eq('game_id', selected.game_id)
+          .maybeSingle()
+        setLocationName(locationData?.name ?? null)
+      }
+
       setIsLoadingContent(false)
     })()
   }, [selected])
@@ -64,6 +101,41 @@ export function ArticleViewer({ selected, articles, onSelectArticle, onEdit }: A
         </div>
       ) : content ? (
         <>
+          {npcInfo && (
+            <div className="mb-4 flex flex-wrap items-center justify-center gap-2">
+              <span className="text-[10px] px-2 py-1 rounded-full border border-amber-600/40 bg-amber-900/20 text-amber-100 uppercase tracking-wider">
+                NPC
+              </span>
+              <span className="text-[10px] px-2 py-1 rounded-full border border-white/20 bg-black/40 text-gray-200">
+                Name: {npcInfo.name}
+              </span>
+              {npcInfo.race && (
+                <span className="text-[10px] px-2 py-1 rounded-full border border-white/20 bg-black/40 text-gray-200">
+                  Rasse: {npcInfo.race}
+                </span>
+              )}
+              {npcInfo.profession && (
+                <span className="text-[10px] px-2 py-1 rounded-full border border-white/20 bg-black/40 text-gray-200">
+                  Beruf: {npcInfo.profession}
+                </span>
+              )}
+              {npcInfo.age !== null && (
+                <span className="text-[10px] px-2 py-1 rounded-full border border-white/20 bg-black/40 text-gray-200">
+                  Alter: {npcInfo.age}
+                </span>
+              )}
+              {locationName && (
+                <span className="text-[10px] px-2 py-1 rounded-full border border-white/20 bg-black/40 text-gray-200">
+                  Heimat: {locationName}
+                </span>
+              )}
+              {npcInfo.article_id !== null && (
+                <span className="text-[10px] px-2 py-1 rounded-full border border-white/20 bg-black/40 text-gray-200">
+                  Artikel-ID: {npcInfo.article_id}
+                </span>
+              )}
+            </div>
+          )}
           <h2 className="font-serif text-2xl text-center mb-6 text-amber-200 tracking-wider">
             <span className="text-amber-500 mr-3">❖</span>
             {selected.title}
