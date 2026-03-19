@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useSupabaseClient } from '@supabase/auth-helpers-react';
 
 // Interfaces (Unverändert)
 interface Character {
@@ -15,9 +14,6 @@ interface Character {
   alive: boolean;
   player_id: number;
   game_id: number;
-  Users: {
-    username: string;
-  } | null;
 }
 
 interface PlayerGroup {
@@ -30,48 +26,37 @@ interface PlayerGroup {
 }
 
 export default function PlayerDashboardGrid({ gameId }: { gameId: number }) {
-  const supabase = useSupabaseClient();
   const [playerGroups, setPlayerGroups] = useState<PlayerGroup[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadAndGroupCharacters() {
       setIsLoading(true);
-      const { data: charactersData, error } = await supabase
-        .from('characters')
-        .select(`*, Users:Users!characters_player_id_fkey (username)`)
-        .eq('game_id', gameId);
+      setLoadError(null);
 
-      if (error || !charactersData) {
-        setIsLoading(false);
-        return;
-      }
+      try {
+        const response = await fetch(`/api/players?gameId=${gameId}`, { cache: 'no-store' });
+        const payload = await response.json();
 
-      const groups: Record<string, PlayerGroup> = {};
-      charactersData.forEach((char: any) => {
-        const pId = char.player_id;
-        const userName = char.Users?.username || `Spieler ${pId}`;
-        const groupKey = String(pId);
-
-        if (!groups[groupKey]) {
-          groups[groupKey] = {
-            player: { id: pId, username: userName },
-            characters: []
-          };
+        if (!response.ok) {
+          throw new Error(payload?.error || 'Unbekannter Fehler beim Laden der Spieler');
         }
-        groups[groupKey].characters.push(char);
-      });
 
-      const sortedGroups = Object.values(groups).sort((a, b) => 
-        a.player.username.localeCompare(b.player.username)
-      );
-      setPlayerGroups(sortedGroups);
-      setIsLoading(false);
+        setPlayerGroups(payload?.groups || []);
+      } catch (err: any) {
+        console.error('PlayerDashboard API Fehler:', err);
+        setLoadError(err?.message || 'Spieler konnten nicht geladen werden.');
+        setPlayerGroups([]);
+      } finally {
+        setIsLoading(false);
+      }
     }
     if (gameId) loadAndGroupCharacters();
-  }, [gameId, supabase]);
+  }, [gameId]);
 
   if (isLoading) return <div className="p-4 text-xs text-amber-500/50 animate-pulse font-mono">Scanne Frequenzen...</div>;
+  if (loadError) return <div className="p-4 text-xs text-red-400">Fehler beim Laden der Spieler: {loadError}</div>;
   if (playerGroups.length === 0) return <div className="p-4 text-xs text-gray-500 italic">Keine Lebenszeichen.</div>;
 
   return (

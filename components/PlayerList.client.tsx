@@ -15,9 +15,6 @@ interface Character {
   alive: boolean;
   player_id: number;
   game_id: number;
-  Users: {
-    username: string;
-  } | null;
 }
 
 interface PlayerGroup {
@@ -35,6 +32,7 @@ export default function PlayerList({ gameId }: { gameId: number }) {
   
   const [playerGroups, setPlayerGroups] = useState<PlayerGroup[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   
   // Modal State
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
@@ -95,55 +93,24 @@ export default function PlayerList({ gameId }: { gameId: number }) {
   // 2. Charaktere laden
   async function loadAndGroupCharacters() {
     setIsLoading(true);
+    setLoadError(null);
 
-    const { data: charactersData, error } = await supabase
-      .from('characters')
-      .select(`
-        *,
-        Users:Users!characters_player_id_fkey (
-          username
-        )
-      `)
-      .eq('game_id', gameId);
+    try {
+      const response = await fetch(`/api/players?gameId=${gameId}`, { cache: 'no-store' });
+      const payload = await response.json();
 
-    if (error) {
-      console.error('Supabase Fehler:', error);
-      setIsLoading(false);
-      return;
-    }
-
-    if (!charactersData) {
-      setPlayerGroups([]);
-      setIsLoading(false);
-      return;
-    }
-
-    const groups: Record<string, PlayerGroup> = {};
-
-    charactersData.forEach((char: any) => {
-      const pId = char.player_id;
-      const userName = char.Users?.username || `Spieler ${pId}`;
-      const groupKey = String(pId);
-
-      if (!groups[groupKey]) {
-        groups[groupKey] = {
-          player: { 
-            id: pId, 
-            username: userName, 
-            avatar_url: undefined 
-          },
-          characters: []
-        };
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Unbekannter Fehler beim Laden der Spieler');
       }
-      groups[groupKey].characters.push(char);
-    });
 
-    const sortedGroups = Object.values(groups).sort((a, b) => 
-      a.player.username.localeCompare(b.player.username)
-    );
-
-    setPlayerGroups(sortedGroups);
-    setIsLoading(false);
+      setPlayerGroups(payload?.groups || []);
+    } catch (err: any) {
+      console.error('Player API Fehler:', err);
+      setLoadError(err?.message || 'Spieler konnten nicht geladen werden.');
+      setPlayerGroups([]);
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -215,6 +182,11 @@ export default function PlayerList({ gameId }: { gameId: number }) {
 
   return (
     <div className="space-y-6 relative">
+      {loadError && (
+        <div className="bg-red-900/20 border border-red-800/50 rounded-lg p-3 text-red-300 text-xs">
+          Spieler konnten nicht geladen werden: {loadError}
+        </div>
+      )}
       
       {/* --- Titel & Controls --- */}
       <div className="flex justify-between items-end border-b border-amber-900/30 pb-4 mb-6">
@@ -250,6 +222,7 @@ export default function PlayerList({ gameId }: { gameId: number }) {
                 </div>
                 {addPlayerError && <span className="text-red-500 text-[10px]">{addPlayerError}</span>}
                 {addPlayerSuccess && <span className="text-green-500 text-[10px]">{addPlayerSuccess}</span>}
+                {gmCheckStatus.startsWith('DB Fehler:') && <span className="text-red-500 text-[10px]">{gmCheckStatus}</span>}
               </div>
             )}
           </div>

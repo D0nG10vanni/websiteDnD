@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useSupabaseClient } from '@supabase/auth-helpers-react'
 import type { InventoryItem, BaseItem } from '@/lib/types' // Pfad anpassen
 
 interface Props {
@@ -10,57 +9,135 @@ interface Props {
   onUpdate: () => void // Callback um die Eltern-Komponente neu zu laden
 }
 
-export default function InventoryManager({ characterId, initialInventory = [], onUpdate }: Props) {
-  const supabase = useSupabaseClient()
-  
+export default function InventoryManager({ characterId, initialInventory, onUpdate }: Props) {
   // State für die Liste der verfügbaren Items (für das Dropdown)
   const [availableItems, setAvailableItems] = useState<BaseItem[]>([])
-  const [selectedItemId, setSelectedItemId] = useState<number | ''>('')
+  const [inventory, setInventory] = useState<InventoryItem[]>(() => initialInventory ?? [])
+  const [selectedItemId, setSelectedItemId] = useState<string>('')
   const [loading, setLoading] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [itemLoadError, setItemLoadError] = useState<string | null>(null)
 
   // 1. Alle möglichen Items laden (für das "Hinzufügen" Dropdown)
   useEffect(() => {
     async function fetchItems() {
-      const { data } = await supabase.from('items').select('*').order('name')
-      if (data) setAvailableItems(data)
+      try {
+        setItemLoadError(null)
+        const response = await fetch('/api/items', { cache: 'no-store' })
+        const payload = await response.json()
+
+        if (!response.ok) {
+          setItemLoadError(payload?.error || 'Item-Liste konnte nicht geladen werden')
+          setAvailableItems([])
+          return
+        }
+
+        const normalizedItems = ((payload?.items || []) as BaseItem[])
+          .filter((item) => item && item.id != null && item.name)
+          .map((item) => ({ ...item, id: Number(item.id) }))
+
+        setAvailableItems(normalizedItems)
+      } catch (err: any) {
+        setItemLoadError(err?.message || 'Item-Liste konnte nicht geladen werden')
+        setAvailableItems([])
+      }
     }
-    fetchItems()
-  }, [supabase])
+    void fetchItems()
+  }, [])
+
+  useEffect(() => {
+    if (availableItems.length > 0 || inventory.length === 0) return
+
+    const fallbackMap = new Map<number, BaseItem>()
+    inventory.forEach((entry) => {
+      if (entry.items?.id != null) {
+        fallbackMap.set(Number(entry.items.id), {
+          ...entry.items,
+          id: Number(entry.items.id),
+        })
+      }
+    })
+
+    const fallbackItems = Array.from(fallbackMap.values())
+    if (fallbackItems.length > 0) {
+      setAvailableItems(fallbackItems)
+    }
+  }, [availableItems.length, inventory])
+
+  const fetchInventory = async () => {
+    const response = await fetch(`/api/character-items?characterId=${characterId}`, { cache: 'no-store' })
+    const payload = await response.json()
+
+    if (!response.ok) {
+      setErrorMessage(`Inventar konnte nicht geladen werden: ${payload?.error || 'Unbekannter Fehler'}`)
+      return
+    }
+
+    setInventory((payload?.inventory as InventoryItem[]) || [])
+  }
+
+  useEffect(() => {
+    if (!characterId) return
+    void fetchInventory()
+  }, [characterId])
 
   // ITEM HINZUFÜGEN
   const handleAddItem = async () => {
     if (!selectedItemId) return
     setLoading(true)
+    setErrorMessage(null)
     
-    const { error } = await supabase
-      .from('character_items')
-      .insert({
-        character_id: characterId,
-        item_id: Number(selectedItemId),
-        quantity: 1,
-        equipped: false
-      })
+    const response = await fetch('/api/character-items', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ characterId, itemId: Number(selectedItemId), quantity: 1, equipped: false }),
+    })
+    const payload = await response.json()
 
-    if (!error) {
-      setSelectedItemId('')
-      onUpdate() // Liste neu laden
+    if (!response.ok) {
+      setErrorMessage(`Item konnte nicht vergeben werden: ${payload?.error || 'Unbekannter Fehler'}`)
+      setLoading(false)
+      return
     }
+
+    setSelectedItemId('')
+    await fetchInventory()
+    onUpdate() // Optional: Eltern-Komponente neu laden
     setLoading(false)
   }
 
   // STATUS ÄNDERN (Equip / Unequip)
   const toggleEquip = async (invItem: InventoryItem) => {
-    await supabase
-      .from('character_items')
-      .update({ equipped: !invItem.equipped })
-      .eq('id', invItem.id)
+    setErrorMessage(null)
+    const response = await fetch('/api/character-items', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: invItem.id, equipped: !invItem.equipped }),
+    })
+    const payload = await response.json()
+    if (!response.ok) {
+      setErrorMessage(`Ausrüstungsstatus konnte nicht geändert werden: ${payload?.error || 'Unbekannter Fehler'}`)
+      return
+    }
+    await fetchInventory()
     onUpdate()
   }
 
   // ITEM LÖSCHEN
   const deleteItem = async (id: number) => {
     if (!confirm('Gegenstand wirklich wegwerfen?')) return
-    await supabase.from('character_items').delete().eq('id', id)
+    setErrorMessage(null)
+    const response = await fetch('/api/character-items', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    })
+    const payload = await response.json()
+    if (!response.ok) {
+      setErrorMessage(`Item konnte nicht gelöscht werden: ${payload?.error || 'Unbekannter Fehler'}`)
+      return
+    }
+    await fetchInventory()
     onUpdate()
   }
 
@@ -69,15 +146,23 @@ export default function InventoryManager({ characterId, initialInventory = [], o
     const newQty = current + change
     if (newQty < 1) return deleteItem(id)
     
-    await supabase
-      .from('character_items')
-      .update({ quantity: newQty })
-      .eq('id', id)
+    setErrorMessage(null)
+    const response = await fetch('/api/character-items', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, quantity: newQty }),
+    })
+    const payload = await response.json()
+    if (!response.ok) {
+      setErrorMessage(`Menge konnte nicht geändert werden: ${payload?.error || 'Unbekannter Fehler'}`)
+      return
+    }
+    await fetchInventory()
     onUpdate()
   }
 
   // Sortieren: Ausgerüstete zuerst
-  const sortedInventory = [...initialInventory].sort((a, b) => 
+  const sortedInventory = [...inventory].sort((a, b) => 
     (a.equipped === b.equipped) ? 0 : a.equipped ? -1 : 1
   )
 
@@ -92,12 +177,12 @@ export default function InventoryManager({ characterId, initialInventory = [], o
           <select 
             className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-sm focus:border-amber-500 focus:outline-none"
             value={selectedItemId}
-            onChange={(e) => setSelectedItemId(Number(e.target.value))}
+            onChange={(e) => setSelectedItemId(e.target.value)}
             disabled={loading}
           >
             <option value="">-- Wähle ein Item --</option>
             {availableItems.map(item => (
-              <option key={item.id} value={item.id}>
+              <option key={item.id} value={String(item.id)}>
                 {item.name} ({item.type})
               </option>
             ))}
@@ -111,6 +196,18 @@ export default function InventoryManager({ characterId, initialInventory = [], o
           {loading ? '...' : '+ Hinzufügen'}
         </button>
       </div>
+
+      {errorMessage && (
+        <div className="text-xs text-red-400 bg-red-950/20 border border-red-900/50 rounded px-3 py-2">
+          {errorMessage}
+        </div>
+      )}
+
+      {itemLoadError && (
+        <div className="text-xs text-amber-300 bg-amber-950/20 border border-amber-800/50 rounded px-3 py-2">
+          Item-Liste konnte nicht geladen werden: {itemLoadError}
+        </div>
+      )}
 
       {/* --- Inventory List --- */}
       <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
