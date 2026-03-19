@@ -586,6 +586,60 @@ const computeEdges = useCallback((nodeList: StoryNode[]): Edge[] => {
     }
   }, [state.nodes, computeEdges, handleError]);
 
+  // Verbindung zwischen zwei Nodes loeschen
+  const removeConnection = useCallback(async (sourceId: string, targetId: string) => {
+    try {
+      const targetNode = state.nodes.find((n) => n.id === targetId);
+      if (!targetNode) return;
+
+      const currentPreds = targetNode.data.predecessors || [];
+      if (!currentPreds.includes(sourceId)) return;
+
+      const newPreds = currentPreds.filter((pred) => pred !== sourceId);
+      const updatedNodes = state.nodes.map((node) =>
+        node.id === targetId
+          ? { ...node, data: { ...node.data, predecessors: newPreds } }
+          : node
+      );
+
+      dispatch({ type: 'UPDATE_NODES', payload: updatedNodes });
+      dispatch({ type: 'UPDATE_EDGES', payload: computeEdges(updatedNodes) });
+
+      const { error } = await supabase
+        .from('story')
+        .update({ predecessors: newPreds })
+        .eq('id', targetId);
+
+      if (error) throw error;
+      showToast('Verbindung geloescht', 'success');
+    } catch (e) {
+      handleError(e, 'Verbindung loeschen fehlgeschlagen');
+    }
+  }, [state.nodes, computeEdges, handleError, showToast]);
+
+  const onEdgesChange: OnEdgesChange = useCallback((changes) => {
+    if (!state.deleteMode) return;
+
+    const removedChanges = changes.filter((change) => change.type === 'remove');
+    if (removedChanges.length === 0) return;
+
+    removedChanges.forEach((change) => {
+      const edge = state.edges.find((currentEdge) => currentEdge.id === change.id);
+      if (edge?.source && edge?.target) {
+        void removeConnection(edge.source, edge.target);
+      }
+    });
+  }, [state.deleteMode, state.edges, removeConnection]);
+
+  const onEdgeClick = useCallback((event: React.MouseEvent, edge: Edge) => {
+    if (!state.deleteMode) return;
+
+    event.stopPropagation();
+    if (!confirm('Diese Verbindung wirklich loeschen?')) return;
+
+    void removeConnection(edge.source, edge.target);
+  }, [state.deleteMode, removeConnection]);
+
   // Node Löschen
   const deleteNode = async (id: string) => {
     if(!confirm("Diesen Node wirklich löschen?")) return;
@@ -718,7 +772,9 @@ const computeEdges = useCallback((nodeList: StoryNode[]): Edge[] => {
           edges={state.edges}
           nodeTypes={nodeTypes}
           onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          onEdgeClick={onEdgeClick}
           // Nur selektieren, wenn wir nicht im Delete Mode sind
           onNodeClick={(_, node) => !state.deleteMode && dispatch({ type: 'SET_SELECTED_NODE', payload: node.id })}
           onPaneClick={() => dispatch({ type: 'SET_SELECTED_NODE', payload: null })}

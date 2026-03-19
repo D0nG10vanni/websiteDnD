@@ -29,12 +29,13 @@ interface NpcCharacter {
   game_id: number;
   name: string;
   location_id: number | null;
-  location_name?: string | null;
   race: string | null;
   age: number | null;
   story: string | null;
-  profession: string | null;
+  profession: string | null; // Das ist unsere "Rolle"
   article_id: number | null;
+  usecase: string | null;    // NEU
+  goal: string | null;       // NEU
 }
 
 interface LocationOption {
@@ -158,7 +159,7 @@ export default function CombinedPage() {
       setIsLoadingNpcs(true);
       const { data: npcData } = await supabase
         .from('npcs')
-        .select('id, game_id, name, location_id, race, age, story, profession, article_id')
+        .select('id, game_id, name, location_id, race, age, story, profession, article_id, usecase, goal')
         .eq('game_id', gameId);
       setArticles(a || []);
       setFolders(f || []);
@@ -347,6 +348,22 @@ export default function CombinedPage() {
       return true;
     }
     return false;
+  };
+  const handleUpdateNpcField = async (id: number, field: string, value: string) => {
+    // 1. Lokales State-Update (damit die UI sofort reagiert)
+    setNpcCharacters(prev => prev.map(npc => 
+      npc.id === id ? { ...npc, [field]: value } : npc
+    ));
+    
+    // 2. Ab in die Datenbank damit
+    const { error } = await supabase
+      .from('npcs')
+      .update({ [field]: value })
+      .eq('id', id);
+      
+    if (error) {
+      console.error("Fehler beim Speichern des NPCs:", error);
+    }
   };
   const handleAddArticle = (n: Post) => setArticles((prev) => [...prev, n]);
   const handleUpdateArticle = (u: Post) => setArticles((prev) => prev.map((a) => a.id === u.id ? u : a));
@@ -543,32 +560,77 @@ export default function CombinedPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                       {npcCharacters.map((npc) => (
                         <div
-                          key={npc.id}
-                          className="rounded-lg border p-3 bg-black/40 border-amber-900/30"
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div>
-                              <div className="text-amber-100 font-serif text-base">{npc.name}</div>
-                              <div className="text-[11px] uppercase tracking-wider text-amber-400/70 mt-0.5">
-                                {npc.race || 'Unbekannt'} • {npc.profession || 'Ohne Rolle'} • Alter {npc.age ?? '?'} • 📍 {getNpcLocationName(npc) || 'Heimatlos'}
-                              </div>
+                        key={npc.id}
+                        className="rounded-lg border p-4 bg-black/40 border-amber-900/30 flex flex-col gap-3"
+                      >
+                        {/* Header (Name & Basis-Infos) */}
+                        <div className="flex items-start justify-between gap-2 border-b border-white/5 pb-2">
+                          <div>
+                            <div className="text-amber-100 font-serif text-lg">{npc.name}</div>
+                            <div className="text-[11px] uppercase tracking-wider text-amber-400/70 mt-0.5">
+                              {npc.race || 'Unbekannt'} • Alter {npc.age ?? '?'}
                             </div>
-                            <span className="text-[10px] px-2 py-0.5 rounded border border-white/20 text-gray-300">
-                              #{npc.id}
-                            </span>
                           </div>
-                          {npc.story && (
-                            <p className="mt-3 text-xs text-gray-300 line-clamp-3">{npc.story}</p>
-                          )}
-                          <div className="mt-3 flex justify-end">
-                            <button
-                              onClick={() => openNpcEditor(npc)}
-                              className="text-xs px-2.5 py-1 rounded border border-amber-700/40 text-amber-200 hover:bg-amber-600/10 transition"
-                            >
-                              Bearbeiten
-                            </button>
+                          <span className="text-[10px] px-2 py-0.5 rounded border border-white/20 text-gray-300">
+                            #{npc.id}
+                          </span>
+                        </div>
+
+                        {/* NEU: Story-Design Textfelder */}
+                        <div className="flex flex-col gap-2">
+                          {/* Usecase */}
+                          <div>
+                            <label className="text-[9px] text-gray-500 uppercase tracking-wider font-bold mb-1 block">Usecase (Story-Funktion)</label>
+                            <input
+                              type="text"
+                              defaultValue={npc.usecase || ''}
+                              onBlur={(e) => handleUpdateNpcField(npc.id, 'usecase', e.target.value)}
+                              className="w-full bg-black/60 border border-white/10 rounded px-2 py-1.5 text-xs text-gray-300 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition-all placeholder-gray-700"
+                              placeholder="z.B. BBEG, Informant, Questgeber..."
+                            />
+                          </div>
+
+                          {/* Rolle (Beruf) */}
+                          <div>
+                            <label className="text-[9px] text-gray-500 uppercase tracking-wider font-bold mb-1 block">Rolle / Titel</label>
+                            <input
+                              type="text"
+                              defaultValue={npc.profession || ''}
+                              onBlur={(e) => handleUpdateNpcField(npc.id, 'profession', e.target.value)}
+                              className="w-full bg-black/60 border border-white/10 rounded px-2 py-1.5 text-xs text-gray-300 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition-all placeholder-gray-700"
+                              placeholder="z.B. Schmied, König, Kultist..."
+                            />
+                          </div>
+
+                          {/* Ziel (Motivation) */}
+                          <div>
+                            <label className="text-[9px] text-gray-500 uppercase tracking-wider font-bold mb-1 block">Ziel / Motivation</label>
+                            <textarea
+                              defaultValue={npc.goal || ''}
+                              onBlur={(e) => handleUpdateNpcField(npc.id, 'goal', e.target.value)}
+                              rows={2}
+                              className="w-full bg-black/60 border border-white/10 rounded px-2 py-1.5 text-xs text-gray-300 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition-all resize-none placeholder-gray-700 custom-scrollbar"
+                              placeholder="Was will der NPC erreichen? Was treibt ihn an?"
+                            />
                           </div>
                         </div>
+
+                        {/* Die normale Lore/Story (falls vorhanden) */}
+                        {npc.story && (
+                          <div className="mt-1 pt-2 border-t border-white/5">
+                            <p className="text-xs text-gray-400 line-clamp-2 italic">{npc.story}</p>
+                          </div>
+                        )}
+
+                        <div className="mt-3 flex justify-end">
+                          <button
+                            onClick={() => openNpcEditor(npc)}
+                            className="text-xs px-2.5 py-1 rounded border border-amber-700/40 text-amber-200 hover:bg-amber-600/10 transition"
+                          >
+                            Bearbeiten
+                          </button>
+                        </div>
+                      </div>
                       ))}
                     </div>
                   )}
