@@ -247,6 +247,9 @@ export default function MarkdownRenderer({ content, className = '', onLinkClick 
 
 function preprocessMarkdown(md: string): string {
   return md
+    // External wikilinks should render as regular markdown anchors.
+    .replace(/\[\[(https?:\/\/[^\]|]+)\|([^\]]+)\]\]/gi, '[$2]($1)')
+    .replace(/\[\[(https?:\/\/[^\]|]+)\]\]/gi, '[$1]($1)')
     .replace(/==([^=]+)==/g, '<mark class="bg-yellow-200 dark:bg-yellow-800 px-1 rounded">$1</mark>')
     .replace(/~~([^~]+)~~/g, '<del>$1</del>')
     .replace(/°([^°]+)°/g, '<span class="author-info">$1</span>')

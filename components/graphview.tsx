@@ -21,6 +21,11 @@ const ForceGraph2D = dynamic(() => import('react-force-graph-2d'), {
   loading: () => <div className="flex items-center justify-center h-full text-gray-500">Lade Knowledge Graph...</div>
 }) as any;
 
+const ForceGraph3D = dynamic(() => import('react-force-graph-3d'), {
+  ssr: false,
+  loading: () => <div className="flex items-center justify-center h-full text-gray-500">Lade 3D Graph...</div>
+}) as any;
+
 // --- TYPEN ---
 interface GraphNode {
   id: string; 
@@ -28,9 +33,15 @@ interface GraphNode {
   type: 'article' | 'folder';
   val: number; 
   color: string;
+  folderClusterId?: number;
+  folderDepth?: number;
   data?: Post | Folder; 
   x?: number;
   y?: number;
+  z?: number;
+  vx?: number;
+  vy?: number;
+  vz?: number;
   neighbors?: {
     incoming: GraphNode[];
     outgoing: GraphNode[];
@@ -54,7 +65,8 @@ export default function GraphView({
   folders = [], 
   onNodeClick 
 }: GraphViewProps) {
-  const fgRef = useRef<any>(null);
+  const fg2dRef = useRef<any>(null);
+  const fg3dRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   
   // State
@@ -63,6 +75,9 @@ export default function GraphView({
   const [infoPanelOpen, setInfoPanelOpen] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false); // State für Settings Panel
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+  const [viewMode, setViewMode] = useState<'2d' | '3d'>('3d');
+
+  const activeFgRef = useMemo(() => (viewMode === '3d' ? fg3dRef : fg2dRef), [viewMode]);
 
   // --- NEU: Physik State ---
   const [physicsControls, setPhysicsControls] = useState({
@@ -70,38 +85,88 @@ export default function GraphView({
     distance: 150
   });
 
+  const computeFallbackHeight = useCallback(() => {
+    if (!containerRef.current || typeof window === 'undefined') return 600;
+    const rect = containerRef.current.getBoundingClientRect();
+    // Fill remaining viewport space downwards with a small bottom gutter.
+    return Math.max(window.innerHeight - rect.top - 20, 420);
+  }, []);
+
   // Resize Observer
   useEffect(() => {
     if (!containerRef.current) return;
     const resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        setDimensions({ width: entry.contentRect.width, height: entry.contentRect.height });
+        const nextWidth = entry.contentRect.width || 800;
+        const measuredHeight = entry.contentRect.height;
+        const nextHeight = measuredHeight > 120 ? measuredHeight : computeFallbackHeight();
+        setDimensions({ width: nextWidth, height: nextHeight });
       }
     });
     resizeObserver.observe(containerRef.current);
-    return () => resizeObserver.disconnect();
-  }, [infoPanelOpen]);
+
+    const handleWindowResize = () => {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const nextWidth = rect.width || 800;
+      const nextHeight = rect.height > 120 ? rect.height : computeFallbackHeight();
+      setDimensions({ width: nextWidth, height: nextHeight });
+    };
+
+    handleWindowResize();
+    window.addEventListener('resize', handleWindowResize);
+
+    return () => {
+      window.removeEventListener('resize', handleWindowResize);
+      resizeObserver.disconnect();
+    };
+  }, [infoPanelOpen, computeFallbackHeight]);
 
   // --- PHYSIK-ENGINE ANPASSEN (LIVE) ---
   useEffect(() => {
-    if (fgRef.current) {
-        // 1. Abstoßung (Charge) - gesteuert durch Slider
-        // Je negativer, desto stärker stoßen sich Knoten ab
-        fgRef.current.d3Force('charge').strength(physicsControls.strength);
-        
-        // 2. Link Distanz - gesteuert durch Slider
-        fgRef.current.d3Force('link').distance(physicsControls.distance);
+    const graph = activeFgRef.current;
+    if (!graph) return;
 
-        // 3. Kollision: Größerer Radius, damit sich Knoten nicht überlappen
-        fgRef.current.d3Force(
-          'collide',
-          forceCollide(45).strength(1)
-        );
-        
-        // Simulation neu anheizen (wichtig für Live-Update)
-        fgRef.current.d3ReheatSimulation();
+    const chargeForce = graph.d3Force('charge');
+    const linkForce = graph.d3Force('link');
+
+    // 1. Abstoßung (Charge) - gesteuert durch Slider
+    // Je negativer, desto stärker stoßen sich Knoten ab
+    if (chargeForce?.strength) {
+      chargeForce.strength(physicsControls.strength);
     }
-  }, [articles, folders, physicsControls]); // Reagiert jetzt auch auf Slider-Changes
+    
+    // 2. Link Distanz - gesteuert durch Slider
+    if (linkForce?.distance) {
+      linkForce.distance(physicsControls.distance);
+    }
+
+    // 3. Kollision nur in 2D setzen (3D intern hat anderes Layout-Handling)
+    if (viewMode === '2d') {
+      graph.d3Force(
+        'collide',
+        forceCollide(45).strength(1)
+      );
+    } else {
+      graph.d3Force('collide', null);
+    }
+    
+    // Simulation neu anheizen (wichtig für Live-Update)
+    graph.d3ReheatSimulation();
+  }, [articles, folders, physicsControls, viewMode, activeFgRef]); // Reagiert jetzt auch auf Slider-Changes
+
+  // Prevent 3D animation lifecycle races when switching modes by pausing hidden renderer.
+  useEffect(() => {
+    const graph3d = fg3dRef.current;
+    if (!graph3d?.pauseAnimation || !graph3d?.resumeAnimation) return;
+
+    if (viewMode === '3d') {
+      graph3d.resumeAnimation();
+      graph3d.d3ReheatSimulation?.();
+    } else {
+      graph3d.pauseAnimation();
+    }
+  }, [viewMode]);
 
   // --- 1. DATEN-AUFBEREITUNG (MEMOIZED) ---
   const { graphData, folderLegend } = useMemo(() => {
@@ -112,6 +177,7 @@ export default function GraphView({
     const articleTitleToId = new Map<string, string>();
     const articleIdToNodeMap = new Map<string, GraphNode>();
     const folderColorMap = new Map<number, string>();
+    const folderDepthMap = new Map<number, number>();
     const legendItems: { id: number; name: string; color: string; depth: number }[] = [];
 
     // --- A. Ordner-Baum aufbauen ---
@@ -155,6 +221,7 @@ export default function GraphView({
 
         const colorStr = color.toString();
         folderColorMap.set(folder.id, colorStr);
+        folderDepthMap.set(folder.id, depth);
         legendItems.push({ id: folder.id, name: folder.name, color: colorStr, depth });
 
         nodes.push({
@@ -197,6 +264,8 @@ export default function GraphView({
         type: 'article',
         val: 5, 
         color: nodeColor,
+        folderClusterId: fId || 0,
+        folderDepth: folderDepthMap.get(fId) ?? 0,
         data: a,
         neighbors: { incoming: [], outgoing: [] } 
       };
@@ -240,16 +309,67 @@ export default function GraphView({
     return { graphData: { nodes, links }, folderLegend: legendItems };
   }, [articles, folders]);
 
+  // 3D clustering by folder structure: articles of same folder are pulled towards shared centers,
+  // with z-offset by folder depth for better spatial separation.
+  useEffect(() => {
+    if (viewMode !== '3d') return;
+    const graph3d = fg3dRef.current;
+    if (!graph3d) return;
+
+    const articleNodes = (graphData.nodes as GraphNode[]).filter((n) => n.type === 'article');
+    const clusterIds = Array.from(new Set(articleNodes.map((n) => n.folderClusterId ?? 0)));
+    const centers = new Map<number, { x: number; y: number; z: number }>();
+
+    const radius = Math.max(180, Math.min(dimensions.width, dimensions.height) * 0.34);
+    clusterIds.forEach((clusterId, index) => {
+      const angle = (index / Math.max(clusterIds.length, 1)) * Math.PI * 2;
+      const sample = articleNodes.find((n) => (n.folderClusterId ?? 0) === clusterId);
+      const depth = sample?.folderDepth ?? 0;
+
+      centers.set(clusterId, {
+        x: Math.cos(angle) * radius,
+        y: Math.sin(angle) * radius,
+        z: depth * 150,
+      });
+    });
+
+    const folderCluster3dForce = (alpha: number) => {
+      articleNodes.forEach((node) => {
+        const center = centers.get(node.folderClusterId ?? 0);
+        if (!center) return;
+
+        node.vx = (node.vx || 0) + (center.x - (node.x || 0)) * 0.08 * alpha;
+        node.vy = (node.vy || 0) + (center.y - (node.y || 0)) * 0.08 * alpha;
+        node.vz = (node.vz || 0) + (center.z - (node.z || 0)) * 0.08 * alpha;
+      });
+    };
+
+    graph3d.d3Force('folderCluster3d', folderCluster3dForce);
+    graph3d.d3ReheatSimulation();
+
+    return () => {
+      graph3d.d3Force('folderCluster3d', null);
+    };
+  }, [viewMode, graphData, dimensions]);
+
   // --- 2. INTERAKTIONEN ---
   const handleNodeClick = useCallback((node: any) => {
     const n = node as GraphNode;
     if (n.type !== 'article') return;
     if (n.data) {
-      fgRef.current?.centerAt(n.x, n.y, 1000);
-      fgRef.current?.zoom(3, 1000);
+      if (viewMode === '3d') {
+        fg3dRef.current?.cameraPosition(
+          { x: (n.x || 0) + 120, y: (n.y || 0) + 120, z: (n.z || 0) + 350 },
+          { x: n.x || 0, y: n.y || 0, z: n.z || 0 },
+          1000
+        );
+      } else {
+        fg2dRef.current?.centerAt(n.x, n.y, 1000);
+        fg2dRef.current?.zoom(3, 1000);
+      }
       setActiveArticle(n.data as Post);
     }
-  }, []);
+  }, [viewMode]);
 
   // --- 3. RENDERING ---
   const paintNode = useCallback((node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
@@ -337,45 +457,83 @@ export default function GraphView({
   }, [hoverNode]);
 
   return (
-    <div className="flex h-full w-full bg-gray-950 overflow-hidden relative font-sans">
+    <div className="flex h-full min-h-[420px] w-full bg-gray-950 overflow-hidden relative font-sans">
       
       {/* GRAPH AREA */}
-      <div ref={containerRef} className="flex-1 relative h-full min-w-0">
-        <ForceGraph2D
-          ref={fgRef}
-          width={dimensions.width}
-          height={dimensions.height}
-          graphData={graphData}
-          
-          nodeCanvasObject={paintNode}
-          linkWidth={(link: any) => {
-             if (link.isFolderLink) return 0;
-             if (hoverNode) {
-                 const s = typeof link.source === 'object' ? link.source.id : link.source;
-                 const t = typeof link.target === 'object' ? link.target.id : link.target;
-                 if (s === hoverNode.id || t === hoverNode.id) return 2;
-             }
-             return 1;
-          }}
-          linkColor={getLinkColor}
-          linkDirectionalArrowLength={7.5}
-          linkDirectionalArrowRelPos={1}
-          
-          d3AlphaDecay={0.02} 
-          d3VelocityDecay={0.1}
-          cooldownTime={7000}
-          
-          onNodeClick={handleNodeClick}
-          onNodeHover={(node: any) => setHoverNode(node || null)}
-          backgroundColor="#020617" 
-        />
+      <div ref={containerRef} className="flex-1 relative h-full min-h-[420px] min-w-0">
+        <div className={`absolute inset-0 ${viewMode === '2d' ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+          <ForceGraph2D
+            key="force-2d"
+            ref={fg2dRef}
+            width={dimensions.width}
+            height={dimensions.height}
+            graphData={graphData}
+            nodeCanvasObject={paintNode}
+            linkWidth={(link: any) => {
+              if (link.isFolderLink) return 0;
+              if (hoverNode) {
+                const s = typeof link.source === 'object' ? link.source.id : link.source;
+                const t = typeof link.target === 'object' ? link.target.id : link.target;
+                if (s === hoverNode.id || t === hoverNode.id) return 2;
+              }
+              return 1;
+            }}
+            linkColor={getLinkColor}
+            linkDirectionalArrowLength={7.5}
+            linkDirectionalArrowRelPos={1}
+            d3AlphaDecay={0.02}
+            d3VelocityDecay={0.1}
+            cooldownTime={7000}
+            onNodeClick={handleNodeClick}
+            onNodeHover={(node: any) => setHoverNode(node || null)}
+            backgroundColor="#020617"
+          />
+        </div>
+
+        <div className={`absolute inset-0 ${viewMode === '3d' ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+          <ForceGraph3D
+            key="force-3d"
+            ref={fg3dRef}
+            width={dimensions.width}
+            height={dimensions.height}
+            graphData={graphData}
+            nodeLabel={(node: any) => (node as GraphNode).label}
+            nodeColor={(node: any) => (node as GraphNode).color}
+            nodeResolution={12}
+            linkWidth={(link: any) => {
+              if (link.isFolderLink) return 0;
+              if (hoverNode) {
+                const s = typeof link.source === 'object' ? link.source.id : link.source;
+                const t = typeof link.target === 'object' ? link.target.id : link.target;
+                if (s === hoverNode.id || t === hoverNode.id) return 2;
+              }
+              return 1;
+            }}
+            linkColor={getLinkColor}
+            linkDirectionalArrowLength={4}
+            linkDirectionalArrowRelPos={1}
+            d3AlphaDecay={0.02}
+            d3VelocityDecay={0.1}
+            cooldownTime={7000}
+            onNodeClick={handleNodeClick}
+            onNodeHover={(node: any) => setHoverNode(node || null)}
+            backgroundColor="#020617"
+          />
+        </div>
 
         {/* Toolbar Top Left */}
         <div className="absolute top-4 left-4 flex gap-2">
-          <button onClick={() => fgRef.current?.zoomToFit(800)} className="p-2 bg-slate-800 text-slate-200 rounded hover:bg-slate-700 border border-slate-600 shadow-lg" title="Zoom Fit">
+          <button
+            onClick={() => setViewMode((prev) => (prev === '2d' ? '3d' : '2d'))}
+            className={`p-2 rounded border shadow-lg transition-colors ${viewMode === '3d' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-800 text-slate-200 hover:bg-slate-700 border-slate-600'}`}
+            title="2D/3D umschalten"
+          >
+            {viewMode === '3d' ? '3D' : '2D'}
+          </button>
+          <button onClick={() => activeFgRef.current?.zoomToFit(800)} className="p-2 bg-slate-800 text-slate-200 rounded hover:bg-slate-700 border border-slate-600 shadow-lg" title="Zoom Fit">
             <ArrowsPointingOutIcon className="w-5 h-5" />
           </button>
-          <button onClick={() => fgRef.current?.d3ReheatSimulation()} className="p-2 bg-slate-800 text-slate-200 rounded hover:bg-slate-700 border border-slate-600 shadow-lg" title="Reload Physics">
+          <button onClick={() => activeFgRef.current?.d3ReheatSimulation()} className="p-2 bg-slate-800 text-slate-200 rounded hover:bg-slate-700 border border-slate-600 shadow-lg" title="Reload Physics">
             <ArrowPathIcon className="w-5 h-5" />
           </button>
         </div>

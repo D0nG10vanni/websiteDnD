@@ -33,6 +33,9 @@ export default function ArticleBrowser({
   const [searchQuery, setSearchQuery] = useState<string>('')
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [isMoving, setIsMoving] = useState(false)
+  const [filterMode, setFilterMode] = useState<'all' | 'uncategorized' | 'folder'>('uncategorized')
+  const [sortField, setSortField] = useState<'title' | 'created_at'>('title')
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
   
   // NEU: State für das Bearbeiten
   const [editingArticle, setEditingArticle] = useState<Post | null>(null)
@@ -55,24 +58,52 @@ export default function ArticleBrowser({
   // --- Filter Logic ---
   const filteredArticles = useMemo(() => {
     let result = articles || []
+
     if (searchQuery.trim().length > 0) {
       const q = searchQuery.toLowerCase()
-      return result.filter(a => 
+      result = result.filter(a => 
         a.title.toLowerCase().includes(q) || 
         a.content.toLowerCase().includes(q)
-      ).sort((a, b) => a.title.localeCompare(b.title))
+      )
     }
-    if (selectedFolderId === null) {
-      return result.filter(a => !a.folder_id).sort((a, b) => a.title.localeCompare(b.title))
-    } else {
-      return result.filter(a => a.folder_id === selectedFolderId).sort((a, b) => a.title.localeCompare(b.title))
+
+    if (filterMode === 'uncategorized') {
+      result = result.filter((a) => !a.folder_id)
+    } else if (filterMode === 'folder' && selectedFolderId !== null) {
+      result = result.filter((a) => a.folder_id === selectedFolderId)
     }
-  }, [articles, searchQuery, selectedFolderId])
+
+    result = [...result].sort((a, b) => {
+      if (sortField === 'title') {
+        const cmp = a.title.localeCompare(b.title)
+        return sortDirection === 'asc' ? cmp : -cmp
+      }
+
+      const timeA = new Date(a.created_at).getTime()
+      const timeB = new Date(b.created_at).getTime()
+      const cmp = timeA - timeB
+      return sortDirection === 'asc' ? cmp : -cmp
+    })
+
+    return result
+  }, [articles, searchQuery, filterMode, selectedFolderId, sortField, sortDirection])
 
   // --- Actions ---
 
   const handleFolderSelect = (id: number | null) => {
+    if (id === null) {
+      setFilterMode('uncategorized')
+    } else {
+      setFilterMode('folder')
+    }
     setSelectedFolderId(id)
+    setSearchQuery('')
+    setSelectedArticle(null)
+  }
+
+  const handleSelectAllArticles = () => {
+    setFilterMode('all')
+    setSelectedFolderId(null)
     setSearchQuery('')
     setSelectedArticle(null)
   }
@@ -184,9 +215,18 @@ export default function ArticleBrowser({
         <div className={`${isSidebarOpen ? 'w-64' : 'w-0'} transition-all duration-300 border-r border-amber-900/30 flex flex-col bg-black/20 overflow-hidden`}>
            <div className="flex-1 overflow-y-auto p-2 custom-scrollbar">
               <button 
+                onClick={handleSelectAllArticles}
+                className={`w-full text-left px-3 py-2 rounded mb-1 text-sm font-serif transition-colors flex items-center gap-2
+                  ${filterMode === 'all' && !searchQuery ? 'bg-amber-900/40 text-amber-100' : 'text-amber-400 hover:bg-amber-900/10'}
+                `}
+              >
+                <span className="opacity-70">✦</span> Ungeordnet
+              </button>
+
+              <button 
                 onClick={() => handleFolderSelect(null)}
                 className={`w-full text-left px-3 py-2 rounded mb-1 text-sm font-serif transition-colors flex items-center gap-2
-                  ${selectedFolderId === null && !searchQuery ? 'bg-amber-900/40 text-amber-100' : 'text-amber-400 hover:bg-amber-900/10'}
+                  ${filterMode === 'uncategorized' && selectedFolderId === null && !searchQuery ? 'bg-amber-900/40 text-amber-100' : 'text-amber-400 hover:bg-amber-900/10'}
                 `}
               >
                 <span className="opacity-70">✧</span> Unkategorisiert
@@ -206,6 +246,26 @@ export default function ArticleBrowser({
 
         {/* PANE 2: Article List */}
         <div className="w-72 border-r border-amber-900/30 flex flex-col bg-black/10 shrink-0">
+          <div className="px-2 py-2 border-b border-amber-900/20 bg-black/20 flex gap-1">
+            <select
+              value={sortField}
+              onChange={(e) => setSortField(e.target.value as 'title' | 'created_at')}
+              className="flex-1 bg-black/50 border border-amber-900/40 rounded px-2 py-1 text-[11px] text-amber-100 focus:outline-none focus:border-amber-500"
+              title="Sortierfeld"
+            >
+              <option value="title">Name</option>
+              <option value="created_at">Erstelldatum</option>
+            </select>
+            <select
+              value={sortDirection}
+              onChange={(e) => setSortDirection(e.target.value as 'asc' | 'desc')}
+              className="flex-1 bg-black/50 border border-amber-900/40 rounded px-2 py-1 text-[11px] text-amber-100 focus:outline-none focus:border-amber-500"
+              title="Sortierreihenfolge"
+            >
+              <option value="asc">Aufsteigend</option>
+              <option value="desc">Absteigend</option>
+            </select>
+          </div>
           <div className="flex-1 overflow-y-auto custom-scrollbar">
             {filteredArticles.length === 0 ? (
                <div className="p-8 text-center text-amber-500/30 text-xs italic font-serif">

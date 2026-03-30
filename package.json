@@ -34,6 +34,7 @@
     "react-dom": "^19.2.3",
     "react-dropzone": "^14.3.8",
     "react-force-graph-2d": "^1.27.1",
+    "react-force-graph-3d": "^1.29.1",
     "react-markdown": "^10.1.0",
     "react-rnd": "^10.5.2",
     "reactflow": "^11.11.4",

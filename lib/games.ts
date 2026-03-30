@@ -1,5 +1,5 @@
 // lib/games.ts
-import { supabase } from './supabaseClient'
+import { supabaseAdmin } from './supabaseAdmin'
 
 export type Game = {
   id: number
@@ -13,11 +13,15 @@ export type Game = {
  * Lädt alle Spiele sortiert nach Erstellungsdatum
  */
 export async function fetchGames(): Promise<Game[]> {
-  // Supabase-Tabellen- und Spaltennamen in lowercase referenzieren
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('games')  // lowercase table name
     .select('id, name, active, created_at, password')
     .order('created_at', { ascending: true })
+
+  if (error) {
+    console.error('fetchGames error:', error.message)
+    return []
+  }
 
   // Mappe Großbuchstaben-Spalten auf lowercase fields
   return (data ?? []).map((g: any) => ({
@@ -32,11 +36,16 @@ export async function fetchGames(): Promise<Game[]> {
  * Lädt ein einzelnes Spiel anhand der ID
  */
 export async function fetchGameById(id: number): Promise<Game | null> {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('games')
     .select('id, name, active, created_at, password')
     .eq('id', id)
     .single()
+
+  if (error) {
+    console.error('fetchGameById error:', error.message)
+    return null
+  }
 
   const g = data as any
   return g

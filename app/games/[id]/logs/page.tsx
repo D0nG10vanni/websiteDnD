@@ -29,6 +29,7 @@ interface NpcCharacter {
   game_id: number;
   name: string;
   location_id: number | null;
+  location_name?: string | null;
   race: string | null;
   age: number | null;
   story: string | null;
@@ -84,6 +85,7 @@ export default function CombinedPage() {
   const [npcCharacters, setNpcCharacters] = useState<NpcCharacter[]>([]);
   const [locations, setLocations] = useState<LocationOption[]>([]);
   const [isLoadingNpcs, setIsLoadingNpcs] = useState(false);
+  const [dataLoadError, setDataLoadError] = useState<string | null>(null);
   const [editingNpc, setEditingNpc] = useState<NpcCharacter | null>(null);
   const [npcForm, setNpcForm] = useState<NpcEditFormState>({
     name: '',
@@ -151,38 +153,48 @@ export default function CombinedPage() {
 
     (async () => {
       setIsLoading(true);
-      const [{ data: a }, { data: f }, { data: locationData }] = await Promise.all([
-        supabase.from('posts').select('*').eq('game_id', gameId),
-        supabase.from('folders').select('*').eq('game_id', gameId),
-        supabase.from('locations').select('id, name').eq('game_id', gameId),
-      ]);
       setIsLoadingNpcs(true);
-      const { data: npcData } = await supabase
-        .from('npcs')
-        .select('id, game_id, name, location_id, race, age, story, profession, article_id, usecase, goal')
-        .eq('game_id', gameId);
-      setArticles(a || []);
-      setFolders(f || []);
-      setLocations((locationData || []) as LocationOption[]);
-      setNpcCharacters((npcData || []) as NpcCharacter[]);
-      setIsLoadingNpcs(false);
+      setDataLoadError(null);
+      const response = await fetch(`/api/dashboard-data?gameId=${gameId}`, { cache: 'no-store' });
+      const payload = await response.json();
 
-      const { data: gameData } = await supabase.from('games').select('name').eq('id', gameId).single();
-      if (gameData) {
-         setGameTitle(gameData.name);
-         document.title = gameData.name; 
+      if (!response.ok) {
+        const message = payload?.error || 'Unknown error';
+        console.error('Dashboard data load failed:', message);
+        setDataLoadError(message);
+        setArticles([]);
+        setFolders([]);
+        setLocations([]);
+        setNpcCharacters([]);
+        setGameTitle('');
+      } else {
+        const loadedArticles = (payload?.articles || []) as Post[];
+        const loadedFolders = payload?.folders || [];
+        const loadedLocations = (payload?.locations || []) as LocationOption[];
+        const loadedNpcs = (payload?.npcs || []) as NpcCharacter[];
+        const loadedGameName = payload?.gameName || '';
+
+        setArticles(loadedArticles);
+        setFolders(loadedFolders);
+        setLocations(loadedLocations);
+        setNpcCharacters(loadedNpcs);
+        if (loadedGameName) {
+          setGameTitle(loadedGameName);
+          document.title = loadedGameName;
+        }
       }
+      setIsLoadingNpcs(false);
 
       setIsLoading(false);
       const loaded = loadLayoutFromStorage();
       setHasLoadedLayout(true);
 
-      if (!loaded && (a || []).length >= 0) {
+      if (!loaded) {
          spawnWindow('logs', 'Logbuch', 20, 80, 400, 600);
          spawnWindow('graph', 'Wissensnetz', 440, 80, 500, 400);
       }
     })();
-  }, [gameId, supabase]);
+  }, [gameId]);
 
   // --- HANDLER ---
   const spawnWindow = (type: WindowType, title: string, x = 50, y = 50, w = 400, h = 300, data: any = null) => {
@@ -377,6 +389,11 @@ export default function CombinedPage() {
 
   return (
     <div className="min-h-screen bg-black text-gray-300 font-sans selection:bg-amber-900 selection:text-white relative overflow-hidden">
+      {dataLoadError && (
+        <div className="fixed top-2 left-1/2 -translate-x-1/2 z-[13000] px-3 py-1.5 text-xs bg-red-950/90 border border-red-700/70 text-red-200 rounded-md shadow-xl">
+          Fehler beim Laden von Artikel/NPC/Graph Daten: {dataLoadError}
+        </div>
+      )}
       
       {/* ========================================================================
         1. LAYER (Ganz hinten): HINTERGRUND

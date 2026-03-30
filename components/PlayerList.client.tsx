@@ -51,31 +51,23 @@ export default function PlayerList({ gameId }: { gameId: number }) {
         setGmCheckStatus('Warte auf Login...');
         return;
       }
-      
-      const { data, error } = await supabase
-        .from('games')
-        .select(`
-          gamemaster_uuid,
-          Users!games_gamemaster_uuid_fkey (
-            username
-          )
-        `)
-        .eq('id', gameId)
-        .single();
 
-      if (error) {
-        console.error("PlayerList: Fehler beim Abrufen des Games:", error);
-        setGmCheckStatus(`DB Fehler: ${error.message}`);
+      const response = await fetch(`/api/game-meta?gameId=${gameId}`, { cache: 'no-store' });
+      const payload = await response.json();
+
+      if (!response.ok) {
+        console.error('PlayerList: Fehler beim Abrufen des Games:', payload);
+        setGmCheckStatus(`DB Fehler: ${payload?.error || 'Unbekannter Fehler'}`);
         return;
       }
 
-      if (!data) {
+      if (!payload) {
         setGmCheckStatus('Kein Spiel gefunden.');
         return;
       }
 
-      const gmName = (data as any).Users?.username || 'Unbekannt';
-      const gmUuid = data.gamemaster_uuid;
+      const gmName = payload.gamemasterName || 'Unbekannt';
+      const gmUuid = payload.gamemasterUuid;
 
       if (gmUuid === user.id) {
         setIsGamemaster(true);
@@ -88,7 +80,7 @@ export default function PlayerList({ gameId }: { gameId: number }) {
     
     if (gameId) checkGamemaster();
     
-  }, [gameId, user, supabase]);
+  }, [gameId, user]);
 
   // 2. Charaktere laden
   async function loadAndGroupCharacters() {

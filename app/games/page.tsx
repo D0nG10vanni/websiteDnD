@@ -5,6 +5,25 @@ import { fetchGames, Game } from '../../lib/games'
 
 export default async function GamesPage() {
   const games: Game[] = await fetchGames()
+  const activeGames = games.filter((game) => game.active)
+  const inactiveGames = games.filter((game) => !game.active)
+
+  const renderGameCard = (game: Game) => (
+    <li key={game.id} className="card bg-base-200 shadow-md border border-primary/10 hover:shadow-lg transition-all">
+      <div className="card-body p-4">
+        <Link href={`/games/${game.id}`} className="card-title font-serif text-xl">
+          <span className="text-primary mr-2">❧</span>
+          {game.name}
+        </Link>
+        <p className="text-sm font-serif text-base-content/70">
+          Begonnen: {new Date(game.created_at).toLocaleDateString()} —
+          <span className={`ml-2 ${game.active ? 'text-success' : 'text-error'}`}>
+            {game.active ? '✧ Aktive Saga' : '✧ Ruhende Saga'}
+          </span>
+        </p>
+      </div>
+    </li>
+  )
 
   return (
     <div className="min-h-screen bg-base-200" data-theme="fantasy">
@@ -25,26 +44,35 @@ export default async function GamesPage() {
                 </p>
               </div>
             ) : (
-              <ul className="space-y-4">
-                {games.map(game => (
-                  <React.Fragment key={game.id}>
-                    <li className="card bg-base-200 shadow-md border border-primary/10 hover:shadow-lg transition-all">
-                      <div className="card-body p-4">
-                        <Link href={`/games/${game.id}`} className="card-title font-serif text-xl">
-                          <span className="text-primary mr-2">❧</span>
-                          {game.name}
-                        </Link>
-                        <p className="text-sm font-serif text-base-content/70">
-                          Begonnen: {new Date(game.created_at).toLocaleDateString()} — 
-                          <span className={`ml-2 ${game.active ? 'text-success' : 'text-error'}`}>
-                            {game.active ? '✧ Aktive Saga' : '✧ Ruhende Saga'}
-                          </span>
-                        </p>
-                      </div>
-                    </li>
-                  </React.Fragment>
-                ))}
-              </ul>
+              <div className="space-y-6">
+                <section>
+                  <div className="flex items-center justify-between mb-3">
+                    <h2 className="font-serif text-lg text-success">Aktive Sagas</h2>
+                    <span className="badge badge-success badge-outline">{activeGames.length}</span>
+                  </div>
+                  {activeGames.length === 0 ? (
+                    <div className="text-sm text-base-content/60 italic p-4 border border-base-300 rounded-lg bg-base-200/40">
+                      Keine aktive Saga vorhanden.
+                    </div>
+                  ) : (
+                    <ul className="space-y-3">{activeGames.map(renderGameCard)}</ul>
+                  )}
+                </section>
+
+                <section>
+                  <div className="flex items-center justify-between mb-3">
+                    <h2 className="font-serif text-lg text-warning">Ruhende Sagas</h2>
+                    <span className="badge badge-warning badge-outline">{inactiveGames.length}</span>
+                  </div>
+                  {inactiveGames.length === 0 ? (
+                    <div className="text-sm text-base-content/60 italic p-4 border border-base-300 rounded-lg bg-base-200/40">
+                      Keine ruhende Saga vorhanden.
+                    </div>
+                  ) : (
+                    <ul className="space-y-3">{inactiveGames.map(renderGameCard)}</ul>
+                  )}
+                </section>
+              </div>
             )}
             
             <div className="divider my-6">✧ ✦ ✧</div>

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, useReducer, useMemo } from "react";
+import React, { useCallback, useEffect, useState, useReducer, useMemo, useRef } from "react";
 import ReactFlow, {
   Background,
   Controls,
@@ -324,6 +324,44 @@ const Toast = ({ message, type, onClose }: { message: string; type: 'success' | 
 // --- MAIN COMPONENT ---
 
 export default function StoryFlowDesigner({ gameId = 1 }: { gameId?: number }) {
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  const computeFallbackHeight = useCallback(() => {
+    if (!rootRef.current || typeof window === 'undefined') return 800;
+    const rect = rootRef.current.getBoundingClientRect();
+    return Math.max(window.innerHeight - rect.top - 20, 420);
+  }, []);
+
+  const [autoHeight, setAutoHeight] = useState(800);
+
+  useEffect(() => {
+    if (!rootRef.current) return;
+
+    const updateHeight = () => {
+      const parent = rootRef.current?.parentElement;
+      const parentHeight = parent?.clientHeight ?? 0;
+      const nextHeight = parentHeight > 200 ? parentHeight : computeFallbackHeight();
+      setAutoHeight(nextHeight);
+    };
+
+    const resizeObserver = new ResizeObserver(() => {
+      updateHeight();
+    });
+
+    const parent = rootRef.current.parentElement;
+    if (parent) {
+      resizeObserver.observe(parent);
+    }
+
+    updateHeight();
+    window.addEventListener('resize', updateHeight);
+
+    return () => {
+      window.removeEventListener('resize', updateHeight);
+      resizeObserver.disconnect();
+    };
+  }, [computeFallbackHeight]);
+
   // State für Navigation (Breadcrumbs)
   // Stack beginnt immer mit Root (id: null)
   const [viewStack, setViewStack] = useState<{id: string | null, label: string}[]>([
@@ -703,7 +741,11 @@ const computeEdges = useCallback((nodeList: StoryNode[]): Edge[] => {
   const selectedNode = state.selectedNodeId ? state.nodes.find(n => n.id === state.selectedNodeId) : null;
 
   return (
-    <div className="w-full h-[800px] border border-gray-700 rounded-xl flex flex-col bg-gray-900 overflow-hidden shadow-2xl">
+    <div
+      ref={rootRef}
+      style={{ height: autoHeight }}
+      className="w-full min-h-[420px] border border-gray-700 rounded-xl flex flex-col bg-gray-900 overflow-hidden shadow-2xl"
+    >
       
       {/* 1. Breadcrumb Navigation */}
       <div className="bg-gray-800 border-b border-gray-700 px-4 py-3 flex items-center gap-2 text-sm shadow-sm z-10">
